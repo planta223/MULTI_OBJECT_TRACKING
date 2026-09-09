@@ -1,0 +1,27 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# External dependency: clone NVlabs/FoundationPose here locally
+/FoundationPose/
+
+# Runtime and generated data; source packages remain tracked
+/results/
+/logs/
+/recordings/
+/debug/
+/weights/
+*.log
+*.mp4
+
+# Editor and OS files
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
