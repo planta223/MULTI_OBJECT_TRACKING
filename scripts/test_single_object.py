@@ -1,11 +1,12 @@
 """Regression test for the verified single-Pipe D405/FoundationPose path."""
 
 import argparse
+import math
 from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -26,6 +27,7 @@ from config import (
 from constants import PIPE1_ID
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
 from pose_processing.task_symmetry import PipeTaskPoseCanonicalizer
+from pose_processing.z_axis_stabilizer import ZAxisPoseStabilizer
 from pose_estimation.pose_result import PoseResult
 from tracking.tracking_manager import TrackingManager
 from camera.realsense_d405 import RealSenseD405Source
@@ -75,6 +77,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
             "task-symmetry index."
         ),
     )
+    parser.add_argument(
+        "--z-axis-stabilization",
+        action="store_true",
+        help=(
+            "Use raw FoundationPose Z-axis direction with temporally stable "
+            "X/Y axes for visualization. FoundationPose tracking state is "
+            "not modified."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.width <= 0 or args.height <= 0 or args.fps <= 0:
@@ -91,11 +102,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 def print_result(result: PoseResult) -> None:
-    pose_text = (
-        "None"
-        if result.pose is None
-        else np.array2string(result.pose, precision=5, suppress_small=False)
-    )
+    pose_summary = "None"
+    if result.pose is not None:
+        pose_summary = "t={} z={}".format(
+            np.array2string(result.pose[:3, 3], precision=5),
+            np.array2string(result.pose[:3, 2], precision=5),
+        )
     fps = (
         1.0 / result.processing_time_s
         if result.processing_time_s > 0.0
@@ -104,7 +116,7 @@ def print_result(result: PoseResult) -> None:
     print(
         f"frame={result.source_frame_id} mode={result.mode.value} "
         f"valid={result.valid} processing={result.processing_time_s * 1000:.2f} "
-        f"ms fps={fps:.2f} raw_pose={pose_text}"
+        f"ms fps={fps:.2f} raw_pose={pose_summary}"
     )
     if result.message:
         print(f"  message={result.message}")
@@ -115,6 +127,62 @@ def require_valid(result: PoseResult) -> None:
         raise RuntimeError(
             f"FoundationPose {result.mode.value} failed: {result.message}"
         )
+
+
+def _rotation_delta_degrees(
+    rotation_a: np.ndarray,
+    rotation_b: np.ndarray,
+) -> float:
+    relative = rotation_a.T @ rotation_b
+    cosine = (np.trace(relative) - 1.0) / 2.0
+    return math.degrees(math.acos(float(np.clip(cosine, -1.0, 1.0))))
+
+
+def _select_visualization_pose(
+    raw_pose: np.ndarray,
+    frame_id: int,
+    stabilizer: ZAxisPoseStabilizer,
+    task_canonicalizer: PipeTaskPoseCanonicalizer,
+    z_axis_stabilization: bool,
+) -> Tuple[np.ndarray, str]:
+    """Post-process a raw result without writing into estimator state."""
+
+    if z_axis_stabilization:
+        if task_canonicalizer.debug:
+            # Preserve the discrete-symmetry diagnostic as an independent
+            # observation; its canonical pose is not fed to the stabilizer.
+            task_canonicalizer.canonicalize(raw_pose, frame_id)
+        return stabilizer.stabilize(raw_pose), "Pipe1 Z-axis stable"
+
+    task_pose = task_canonicalizer.canonicalize(raw_pose, frame_id)
+    return task_pose.canonical_pose, "Pipe1 task-canonical"
+
+
+def _print_stabilization_debug(
+    frame_id: int,
+    raw_pose: np.ndarray,
+    stable_pose: np.ndarray,
+    previous_stable_pose: Optional[np.ndarray],
+) -> None:
+    raw_to_stable = _rotation_delta_degrees(
+        raw_pose[:3, :3], stable_pose[:3, :3]
+    )
+    stable_delta = (
+        None
+        if previous_stable_pose is None
+        else _rotation_delta_degrees(
+            previous_stable_pose[:3, :3], stable_pose[:3, :3]
+        )
+    )
+    stable_delta_text = "n/a" if stable_delta is None else f"{stable_delta:.3f}deg"
+    print(
+        f"z_stable frame={frame_id} "
+        f"raw_z={np.array2string(raw_pose[:3, 2], precision=5)} "
+        f"stable_z={np.array2string(stable_pose[:3, 2], precision=5)} "
+        f"raw_to_stable={raw_to_stable:.3f}deg "
+        f"stable_delta={stable_delta_text} "
+        f"det={np.linalg.det(stable_pose[:3, :3]):.9f}"
+    )
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -163,6 +231,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         task_canonicalizer = PipeTaskPoseCanonicalizer(
             debug=args.task_symmetry_debug
         )
+        stabilizer = ZAxisPoseStabilizer()
         print(f"Pipe1 CAD: {tracker.cad.model_path}")
         print(f"Mesh scale: {args.mesh_scale_to_meter} m/unit")
         print(
@@ -185,13 +254,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             segmenter = ManualPolygonSegmenter((PIPE1_ID,))
             masks = segmenter.segment(frozen_frame)
+            # A new registration starts a new application-level stable basis.
+            # FoundationPose retains its own independent raw pose chain.
+            stabilizer.reset()
+            task_canonicalizer.reset()
             register_result = manager.register_all(frozen_frame, masks)[0]
             print_result(register_result)
             require_valid(register_result)
-            task_pose = task_canonicalizer.canonicalize(
+            visualization_pose, visualization_label = _select_visualization_pose(
                 register_result.pose,
                 register_result.source_frame_id,
+                stabilizer,
+                task_canonicalizer,
+                args.z_axis_stabilization,
             )
+            previous_stable_pose = None
+            if args.z_axis_stabilization:
+                _print_stabilization_debug(
+                    register_result.source_frame_id,
+                    register_result.pose,
+                    visualization_pose,
+                    previous_stable_pose,
+                )
+                previous_stable_pose = visualization_pose.copy()
 
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             while True:
@@ -201,10 +286,22 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 track_result = manager.track_all(frame)[0]
                 print_result(track_result)
                 require_valid(track_result)
-                task_pose = task_canonicalizer.canonicalize(
+                visualization_pose, visualization_label = _select_visualization_pose(
                     track_result.pose,
                     track_result.source_frame_id,
+                    stabilizer,
+                    task_canonicalizer,
+                    args.z_axis_stabilization,
                 )
+                if args.z_axis_stabilization:
+                    if track_result.source_frame_id % 30 == 0:
+                        _print_stabilization_debug(
+                            track_result.source_frame_id,
+                            track_result.pose,
+                            visualization_pose,
+                            previous_stable_pose,
+                        )
+                    previous_stable_pose = visualization_pose.copy()
                 track_fps = (
                     1.0 / track_result.processing_time_s
                     if track_result.processing_time_s > 0.0
@@ -213,11 +310,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 image = draw_pose_overlay(
                     rgb=frame.rgb,
                     K=frame.K,
-                    pose=task_pose.canonical_pose,
+                    pose=visualization_pose,
                     bbox=tracker.bbox,
                     to_origin=tracker.to_origin,
                     fps=track_fps,
-                    label="Pipe1 task-canonical",
+                    label=visualization_label,
                     axis_length_m=args.axis_length_m,
                 )
                 cv2.imshow(window_name, image)
