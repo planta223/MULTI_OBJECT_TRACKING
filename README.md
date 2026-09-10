@@ -1,10 +1,9 @@
 # MULTI_OBJECT_TRACKING
 
 A responsibility-oriented migration of the existing D405, FoundationPose, and
-pipe_tracking work. The current regression baseline is one manually masked
-pipe. The tracking core retains support for constructing one or two independent
-object estimators, but this project does not yet claim validated dual-pipe
-tracking.
+pipe_tracking work. Single- and dual-pipe live regression entrypoints use the
+same camera, segmentation, and tracking abstractions. Hardware accuracy still
+depends on the selected CAD, masks, scene, and FoundationPose environment.
 
 ## Responsibilities
 
@@ -62,7 +61,7 @@ silently replaced with the Pipe1 CAD.
 
 The migrated task canonicalizer is unchanged: it compares six discrete
 candidates formed from Z rotations of 0/120/240 degrees and X rotations of
-0/180 degrees. No Z-axis stabilizer is included.
+0/180 degrees. The single-object post-processing options remain available.
 
 ## D405 tools
 
@@ -96,9 +95,20 @@ D405 sensor package:
 TrackingManager still creates a separate object tracker—and therefore a
 separate FoundationPose estimator and pose_last—for each configured object.
 Heavy scorer/refiner/raster resources are shared and inference calls remain
-serialized. A real Pipe2 CAD, two-object visualization, and hardware regression
-are still required. scripts/test_multi_object.py exits with an explicit
-not-implemented message.
+serialized. `scripts/test_multi_object.py` uses one D405 frame per cycle for
+both trackers. Initial masks are selected in Pipe1 then Pipe2 order on the same
+frozen frame. The live overlay uses yellow for Pipe1 and magenta for Pipe2.
+Task symmetry and Z-axis stabilization are both off by default.
+
+    python3 scripts/test_multi_object.py \
+      --foundationpose-root /home/kkb/Workspace/FoundationPose \
+      --pipe1-model-path models/pipe1.obj \
+      --pipe2-model-path models/pipe2.obj \
+      --mesh-scale-to-meter 0.001
+
+`run_tracking.py` continues to expose the verified single-object path. Actual
+dual-object D405 accuracy and performance must be checked with both physical
+objects present.
 
 ROS2 is not imported by the core. A future node can replace the orchestration
 layer without changing estimator or tracking contracts; see ros2/README.md.

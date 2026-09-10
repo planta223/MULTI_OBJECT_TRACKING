@@ -46,6 +46,44 @@ def draw_pose_overlay(
     """Draw the oriented CAD bbox and XYZ axes over an RGB image."""
 
     image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    image = draw_pose_overlay_on_bgr(
+        image_bgr=image,
+        K=K,
+        pose=pose,
+        bbox=bbox,
+        to_origin=to_origin,
+        fps=fps,
+        label=label,
+        axis_length_m=axis_length_m,
+    )
+    cv2.putText(
+        image,
+        "X:red  Y:green  Z:blue  Q/Esc: quit",
+        (15, 54),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.5,
+        (255, 255, 255),
+        1,
+        cv2.LINE_AA,
+    )
+    return image
+
+
+def draw_pose_overlay_on_bgr(
+    image_bgr: np.ndarray,
+    K: np.ndarray,
+    pose: np.ndarray,
+    bbox: np.ndarray,
+    to_origin: np.ndarray,
+    fps: Optional[float] = None,
+    label: str = "Pipe1",
+    axis_length_m: float = 0.05,
+    overlay_color: Tuple[int, int, int] = (0, 255, 255),
+    text_origin: Tuple[int, int] = (15, 28),
+) -> np.ndarray:
+    """Add one pose to a BGR canvas so multiple objects can be composed."""
+
+    image = np.array(image_bgr, copy=True, order="C")
     centered_to_camera = pose @ np.linalg.inv(to_origin)
 
     low = np.min(bbox, axis=0)
@@ -58,7 +96,7 @@ def draw_pose_overlay(
                 image,
                 tuple(pixels[start]),
                 tuple(pixels[end]),
-                (0, 255, 255),
+                overlay_color,
                 2,
                 cv2.LINE_AA,
             )
@@ -98,21 +136,11 @@ def draw_pose_overlay(
     cv2.putText(
         image,
         text,
-        (15, 28),
+        text_origin,
         cv2.FONT_HERSHEY_SIMPLEX,
         0.58,
-        (0, 255, 255),
+        overlay_color,
         2,
-        cv2.LINE_AA,
-    )
-    cv2.putText(
-        image,
-        "X:red  Y:green  Z:blue  Q/Esc: quit",
-        (15, 54),
-        cv2.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (255, 255, 255),
-        1,
         cv2.LINE_AA,
     )
     return image
