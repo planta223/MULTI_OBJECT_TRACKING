@@ -7,6 +7,7 @@ import re
 from typing import Optional, Tuple
 
 from constants import (
+    SUPPORTED_IDENTITY_MODES,
     SUPPORTED_OBJECT_COUNTS,
     SUPPORTED_SEGMENTATION_MODES,
 )
@@ -53,6 +54,27 @@ class FoundationPoseConfig:
 
 
 @dataclass(frozen=True)
+class TrackingConfig:
+    """Estimator-independent temporal identity protection settings."""
+
+    identity_mode: str = "depth_motion"
+    process_acceleration_std_mps2: float = 0.75
+    measurement_position_std_m: float = 0.02
+    initial_position_std_m: float = 0.02
+    initial_velocity_std_mps: float = 0.25
+    mahalanobis_gate_threshold_sq: float = 11.345
+    association_margin_sq: float = 1.0
+    collapse_distance_m: float = 0.05
+    occlusion_overlap_ratio: float = 0.25
+    occlusion_min_depth_separation_m: float = 0.04
+    occlusion_depth_margin_m: float = 0.01
+    occlusion_min_valid_depth_pixels: int = 20
+    max_predict_only_seconds: float = 1.0
+    max_prediction_std_m: float = 0.25
+    identity_debug: bool = False
+
+
+@dataclass(frozen=True)
 class ObjectConfig:
     object_id: str
     model_path: Path
@@ -76,6 +98,7 @@ class AppConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     segmentation: SegmentationConfig = field(default_factory=SegmentationConfig)
     foundationpose: FoundationPoseConfig = field(default_factory=FoundationPoseConfig)
+    tracking: TrackingConfig = field(default_factory=TrackingConfig)
     objects: Tuple[ObjectConfig, ...] = field(default_factory=lambda: OBJECTS)
     output: OutputConfig = field(default_factory=OutputConfig)
 
@@ -111,6 +134,34 @@ class AppConfig:
             raise ValueError("FoundationPose debug level cannot be negative.")
         if not isinstance(self.foundationpose.root, Path):
             raise TypeError("FoundationPose root must be a pathlib.Path.")
+        if self.tracking.identity_mode not in SUPPORTED_IDENTITY_MODES:
+            raise ValueError(
+                f"Unsupported identity mode: {self.tracking.identity_mode!r}."
+            )
+        positive_tracking_values = {
+            "process_acceleration_std_mps2": self.tracking.process_acceleration_std_mps2,
+            "measurement_position_std_m": self.tracking.measurement_position_std_m,
+            "initial_position_std_m": self.tracking.initial_position_std_m,
+            "initial_velocity_std_mps": self.tracking.initial_velocity_std_mps,
+            "mahalanobis_gate_threshold_sq": self.tracking.mahalanobis_gate_threshold_sq,
+            "collapse_distance_m": self.tracking.collapse_distance_m,
+            "occlusion_min_depth_separation_m": self.tracking.occlusion_min_depth_separation_m,
+            "occlusion_depth_margin_m": self.tracking.occlusion_depth_margin_m,
+            "max_predict_only_seconds": self.tracking.max_predict_only_seconds,
+            "max_prediction_std_m": self.tracking.max_prediction_std_m,
+        }
+        for name, value in positive_tracking_values.items():
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be finite and positive.")
+        if (
+            not math.isfinite(self.tracking.association_margin_sq)
+            or self.tracking.association_margin_sq < 0
+        ):
+            raise ValueError("association_margin_sq must be finite and non-negative.")
+        if not 0 < self.tracking.occlusion_overlap_ratio <= 1:
+            raise ValueError("occlusion_overlap_ratio must be in (0, 1].")
+        if self.tracking.occlusion_min_valid_depth_pixels < 1:
+            raise ValueError("occlusion_min_valid_depth_pixels must be positive.")
 
         object_ids = [item.object_id for item in self.objects]
         if any(not object_id for object_id in object_ids):

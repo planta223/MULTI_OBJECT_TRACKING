@@ -1,6 +1,7 @@
 """FoundationPose state and CAD assets for one tracked object."""
 
 from dataclasses import dataclass
+import copy
 from pathlib import Path
 import time
 from typing import Any, Optional, Union
@@ -28,6 +29,15 @@ class CadModel:
     to_origin: np.ndarray
     extents: np.ndarray
     bbox: np.ndarray
+
+
+@dataclass(frozen=True)
+class EstimatorTrackingState:
+    """Opaque FoundationPose state plus wrapper state for rollback."""
+
+    pose_last: Any
+    tracker_state: TrackingState
+    last_result: Optional[PoseResult]
 
 
 def load_cad_model(object_config: ObjectConfig) -> CadModel:
@@ -160,6 +170,87 @@ class FoundationPoseTracker:
     @property
     def object_id(self) -> str:
         return self.object_config.object_id
+
+    @staticmethod
+    def _clone_estimator_value(value: Any) -> Any:
+        if hasattr(value, "detach") and hasattr(value, "clone"):
+            return value.detach().clone()
+        if isinstance(value, np.ndarray):
+            return np.array(value, copy=True, order="C")
+        return copy.deepcopy(value)
+
+    @staticmethod
+    def _estimator_value_as_numpy(value: Any) -> np.ndarray:
+        converted = value
+        if hasattr(converted, "detach"):
+            converted = converted.detach()
+        if hasattr(converted, "cpu"):
+            converted = converted.cpu()
+        if hasattr(converted, "numpy"):
+            converted = converted.numpy()
+        return np.asarray(converted, dtype=np.float64)
+
+    def backup_tracking_state(self) -> EstimatorTrackingState:
+        """Snapshot state that a rejected ``track_one`` candidate may mutate."""
+
+        pose_last = getattr(self.estimator, "pose_last", None)
+        if pose_last is None:
+            raise RuntimeError(
+                f"Cannot back up uninitialized estimator state for {self.object_id}."
+            )
+        return EstimatorTrackingState(
+            pose_last=self._clone_estimator_value(pose_last),
+            tracker_state=self.state,
+            last_result=self.last_result,
+        )
+
+    def restore_tracking_state(self, snapshot: EstimatorTrackingState) -> None:
+        """Restore the last accepted state after rejecting a measurement."""
+
+        if not isinstance(snapshot, EstimatorTrackingState):
+            raise TypeError("snapshot must be an EstimatorTrackingState.")
+        self.estimator.pose_last = self._clone_estimator_value(snapshot.pose_last)
+        self.state = snapshot.tracker_state
+        self.last_result = snapshot.last_result
+
+    def set_tracking_pose(self, raw_pose: np.ndarray) -> None:
+        """Move FoundationPose's next initial state to an accepted prediction.
+
+        ``raw_pose`` uses the public original-CAD-to-camera convention. The
+        conversion back to FoundationPose's centered-mesh ``pose_last`` stays
+        inside this estimator adapter.
+        """
+
+        pose = self._validate_pose(raw_pose)
+        current_state = getattr(self.estimator, "pose_last", None)
+        if current_state is None:
+            raise RuntimeError(
+                f"Cannot set uninitialized estimator state for {self.object_id}."
+            )
+        to_centered = self._estimator_value_as_numpy(
+            self.estimator.get_tf_to_centered_mesh()
+        ).reshape(4, 4)
+        centered_pose = pose @ np.linalg.inv(to_centered)
+        current_shape = tuple(current_state.shape)
+        if int(np.prod(current_shape)) != 16:
+            raise ValueError(
+                f"Unexpected estimator pose_last shape for {self.object_id}: "
+                f"{current_shape}."
+            )
+        centered_pose = centered_pose.reshape(current_shape)
+        if hasattr(current_state, "new_tensor"):
+            self.estimator.pose_last = current_state.new_tensor(centered_pose)
+        elif isinstance(current_state, np.ndarray):
+            self.estimator.pose_last = centered_pose.astype(
+                current_state.dtype,
+                copy=True,
+            )
+        else:
+            raise TypeError(
+                "Unsupported FoundationPose pose_last value: "
+                f"{type(current_state).__name__}."
+            )
+        self.state = TrackingState.TRACKING
 
     @staticmethod
     def _foundationpose_input(array: np.ndarray) -> np.ndarray:
@@ -364,4 +455,3 @@ class FoundationPoseTracker:
 
 # Compatibility name retained for the proven tracking layer contract.
 ObjectTracker = FoundationPoseTracker
-

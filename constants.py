@@ -7,6 +7,7 @@ PIPE1_ID = "pipe1"
 PIPE2_ID = "pipe2"
 SUPPORTED_OBJECT_COUNTS = (1, 2)
 SUPPORTED_SEGMENTATION_MODES = ("manual",)
+SUPPORTED_IDENTITY_MODES = ("none", "motion", "depth_motion")
 
 AXIS_X = 0
 AXIS_Y = 1
@@ -19,6 +20,7 @@ class TrackingState(str, Enum):
 
     UNINITIALIZED = "uninitialized"
     TRACKING = "tracking"
+    OCCLUDED = "occluded"
     LOST = "lost"
 
 

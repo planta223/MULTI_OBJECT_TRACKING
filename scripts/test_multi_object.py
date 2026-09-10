@@ -23,8 +23,9 @@ from config import (
     FoundationPoseConfig,
     ObjectConfig,
     OutputConfig,
+    TrackingConfig,
 )
-from constants import PIPE1_ID, PIPE2_ID
+from constants import PIPE1_ID, PIPE2_ID, SUPPORTED_IDENTITY_MODES
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
 from pose_estimation.pose_result import PoseResult
 from pose_processing.object_pose_processor import ObjectPoseProcessor
@@ -77,6 +78,17 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--track-refine-iter", type=int, default=2)
     parser.add_argument("--axis-length-m", type=float, default=0.05)
     parser.add_argument("--debug", type=int, default=0)
+    parser.add_argument(
+        "--identity-mode",
+        choices=SUPPORTED_IDENTITY_MODES,
+        default="depth_motion",
+        help="Identity protection: baseline, motion gating, or depth-aware gating.",
+    )
+    parser.add_argument(
+        "--identity-debug",
+        action="store_true",
+        help="Print and overlay KF, occlusion, and measurement-gating decisions.",
+    )
     output_pose_group = parser.add_mutually_exclusive_group()
     output_pose_group.add_argument(
         "--task-symmetry-output",
@@ -151,6 +163,7 @@ def _draw_results(
     processed_poses: Dict[str, np.ndarray],
     manager: TrackingManager,
     axis_length_m: float,
+    identity_debug: bool,
 ) -> np.ndarray:
     image = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
     for object_id in (PIPE1_ID, PIPE2_ID):
@@ -199,6 +212,32 @@ def _draw_results(
         1,
         cv2.LINE_AA,
     )
+    if identity_debug:
+        for index, object_id in enumerate((PIPE1_ID, PIPE2_ID)):
+            decision = manager.last_identity_decisions.get(object_id)
+            if decision is None:
+                continue
+            distance = (
+                "n/a"
+                if decision.mahalanobis_distance_sq is None
+                else f"{decision.mahalanobis_distance_sq:.2f}"
+            )
+            action = "ACCEPT" if decision.measurement_accepted else "PREDICT"
+            cv2.putText(
+                image,
+                (
+                    f"{object_id} {decision.state.value} "
+                    f"{decision.visibility_label} {action} "
+                    f"d2={distance} std={decision.prediction_std_m:.3f} "
+                    f"{decision.reason}"
+                ),
+                (15, 108 + 22 * index),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.43,
+                _DISPLAY_COLORS[object_id],
+                1,
+                cv2.LINE_AA,
+            )
     return image
 
 
@@ -245,6 +284,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             ),
             camera=camera_config,
             foundationpose=foundationpose_config,
+            tracking=TrackingConfig(
+                identity_mode=args.identity_mode,
+                identity_debug=args.identity_debug,
+            ),
             objects=object_configs,
             output=OutputConfig(output_dir=Path(debug_dir)),
         )
@@ -318,6 +361,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
                 # Exactly one camera acquisition is shared by both trackers.
                 results = _results_by_object(manager.track_all(frame))
+                if args.identity_debug:
+                    for object_id in (PIPE1_ID, PIPE2_ID):
+                        decision = manager.last_identity_decisions.get(object_id)
+                        if decision is not None:
+                            print(f"identity {decision.debug_text()}")
                 processed_poses: Dict[str, np.ndarray] = {}
                 for object_id in (PIPE1_ID, PIPE2_ID):
                     result = results[object_id]
@@ -335,6 +383,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     processed_poses=processed_poses,
                     manager=manager,
                     axis_length_m=args.axis_length_m,
+                    identity_debug=args.identity_debug,
                 )
                 cv2.imshow(window_name, image)
                 if (cv2.waitKey(1) & 0xFF) in (ord("q"), 27):

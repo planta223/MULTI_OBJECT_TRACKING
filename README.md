@@ -104,7 +104,28 @@ Task symmetry and Z-axis stabilization are both off by default.
       --foundationpose-root /home/kkb/Workspace/FoundationPose \
       --pipe1-model-path models/pipe1.obj \
       --pipe2-model-path models/pipe2.obj \
-      --mesh-scale-to-meter 0.001
+      --mesh-scale-to-meter 0.001 \
+      --identity-mode depth_motion \
+      --identity-debug
+
+Dual-object identity protection defaults to `depth_motion`. Each object has an
+independent NumPy constant-velocity translation filter. Before calling an
+estimator, predicted CAD bounds are projected into the shared RGB-D frame. If
+their image regions overlap and observed depth agrees with the predicted front
+object, the rear estimator call is skipped and its translation is predicted;
+the last accepted raw rotation is retained. Visible estimator candidates pass
+a configurable 3D Mahalanobis innovation gate before being committed.
+
+The estimator state is snapshotted before `track_one()`. A rejected candidate
+restores the previous `pose_last`, then seeds the next estimator call from the
+identity-safe predicted pose. Task symmetry and Z-axis stabilization remain
+strictly downstream output processing and never feed the identity filter.
+
+Use `--identity-mode motion` to test prediction and gating without depth
+occlusion handling, or `--identity-mode none` for the original unprotected
+dual-estimator baseline. `--identity-debug` prints measured/predicted XYZ,
+velocity, Mahalanobis distance, front/rear visibility, depth evidence, and the
+ACCEPT/PREDICT decision while adding a compact state line to the live overlay.
 
 `run_tracking.py` continues to expose the verified single-object path. Actual
 dual-object D405 accuracy and performance must be checked with both physical

@@ -6,7 +6,13 @@ from unittest.mock import patch
 import numpy as np
 
 from camera.base import FrameData
-from config import AppConfig, FoundationPoseConfig, ObjectConfig, OutputConfig
+from config import (
+    AppConfig,
+    FoundationPoseConfig,
+    ObjectConfig,
+    OutputConfig,
+    TrackingConfig,
+)
 from constants import PIPE1_ID, PIPE2_ID, TrackingMode, TrackingState
 from pose_estimation.pose_result import PoseResult
 from scripts.test_multi_object import parse_args
@@ -102,6 +108,8 @@ def test_dual_cli_defaults_to_both_real_models() -> None:
     assert args.mesh_scale_to_meter == 0.001
     assert args.task_symmetry_output is False
     assert args.z_axis_stabilization is False
+    assert args.identity_mode == "depth_motion"
+    assert TrackingConfig().identity_mode == "depth_motion"
 
 
 def test_manual_segmenter_uses_same_frame_and_separate_object_ids() -> None:
@@ -127,6 +135,7 @@ def test_manager_shares_frame_but_isolates_trackers_and_failures(tmp_path) -> No
     FakeObjectTracker.instances = {}
     config = AppConfig(
         foundationpose=FoundationPoseConfig(root=PROJECT_ROOT.parent / "FoundationPose"),
+        tracking=TrackingConfig(identity_mode="none"),
         objects=(
             ObjectConfig(PIPE1_ID, PROJECT_ROOT / "models" / "pipe1.obj", 0.001),
             ObjectConfig(PIPE2_ID, PROJECT_ROOT / "models" / "pipe2.obj", 0.001),
