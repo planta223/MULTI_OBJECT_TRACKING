@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import tempfile
 import time
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 import cv2
 import numpy as np
@@ -26,11 +26,10 @@ from config import (
 )
 from constants import PIPE1_ID
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
-from pose_processing.task_symmetry import PipeTaskPoseCanonicalizer
-from pose_processing.z_axis_stabilizer import ZAxisPoseStabilizer
+from pose_processing.object_pose_processor import ObjectPoseProcessor
 from pose_estimation.pose_result import PoseResult
 from tracking.tracking_manager import TrackingManager
-from camera.realsense_d405 import RealSenseD405Source
+from camera import create_camera_source
 from visualization.visualization import draw_pose_overlay
 from segmentation.manual.polygon_segmenter import (
     ManualPolygonSegmenter,
@@ -39,7 +38,7 @@ from segmentation.manual.polygon_segmenter import (
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
-    workspace_root = PROJECT_ROOT
+    workspace_root = PROJECT_ROOT.parent
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--foundationpose-root",
@@ -64,6 +63,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--serial")
+    parser.add_argument("--camera-type", default="realsense_d405")
     parser.add_argument("--warmup-seconds", type=float, default=1.0)
     parser.add_argument("--register-refine-iter", type=int, default=5)
     parser.add_argument("--track-refine-iter", type=int, default=2)
@@ -138,26 +138,6 @@ def _rotation_delta_degrees(
     return math.degrees(math.acos(float(np.clip(cosine, -1.0, 1.0))))
 
 
-def _select_visualization_pose(
-    raw_pose: np.ndarray,
-    frame_id: int,
-    stabilizer: ZAxisPoseStabilizer,
-    task_canonicalizer: PipeTaskPoseCanonicalizer,
-    z_axis_stabilization: bool,
-) -> Tuple[np.ndarray, str]:
-    """Post-process a raw result without writing into estimator state."""
-
-    if z_axis_stabilization:
-        if task_canonicalizer.debug:
-            # Preserve the discrete-symmetry diagnostic as an independent
-            # observation; its canonical pose is not fed to the stabilizer.
-            task_canonicalizer.canonicalize(raw_pose, frame_id)
-        return stabilizer.stabilize(raw_pose), "Pipe1 Z-axis stable"
-
-    task_pose = task_canonicalizer.canonicalize(raw_pose, frame_id)
-    return task_pose.canonical_pose, "Pipe1 task-canonical"
-
-
 def _print_stabilization_debug(
     frame_id: int,
     raw_pose: np.ndarray,
@@ -188,6 +168,7 @@ def _print_stabilization_debug(
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parse_args(argv)
     camera_config = CameraConfig(
+        camera_type=args.camera_type,
         width=args.width,
         height=args.height,
         fps=args.fps,
@@ -204,7 +185,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_refine_iter=args.track_refine_iter,
         debug=args.debug,
     )
-    camera = RealSenseD405Source(camera_config)
+    camera = create_camera_source(camera_config)
     window_name = "Pipe1 live FoundationPose"
 
     with tempfile.TemporaryDirectory(
@@ -228,10 +209,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         runtime = FoundationPoseRuntime(args.foundationpose_root)
         manager = TrackingManager(app_config, runtime=runtime)
         tracker = manager.trackers[PIPE1_ID]
-        task_canonicalizer = PipeTaskPoseCanonicalizer(
-            debug=args.task_symmetry_debug
+        pose_processor = ObjectPoseProcessor(
+            enable_z_axis_stabilization=args.z_axis_stabilization,
+            enable_task_symmetry_output=not args.z_axis_stabilization,
+            enable_task_symmetry_diagnostic=args.task_symmetry_debug,
         )
-        stabilizer = ZAxisPoseStabilizer()
         print(f"Pipe1 CAD: {tracker.cad.model_path}")
         print(f"Mesh scale: {args.mesh_scale_to_meter} m/unit")
         print(
@@ -256,27 +238,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             masks = segmenter.segment(frozen_frame)
             # A new registration starts a new application-level stable basis.
             # FoundationPose retains its own independent raw pose chain.
-            stabilizer.reset()
-            task_canonicalizer.reset()
+            pose_processor.reset()
             register_result = manager.register_all(frozen_frame, masks)[0]
             print_result(register_result)
             require_valid(register_result)
-            visualization_pose, visualization_label = _select_visualization_pose(
+            processed_pose = pose_processor.process(
                 register_result.pose,
                 register_result.source_frame_id,
-                stabilizer,
-                task_canonicalizer,
-                args.z_axis_stabilization,
+            )
+            visualization_label = (
+                "Pipe1 Z-axis stable"
+                if processed_pose.z_axis_stabilized
+                else "Pipe1 task-canonical"
             )
             previous_stable_pose = None
             if args.z_axis_stabilization:
                 _print_stabilization_debug(
                     register_result.source_frame_id,
-                    register_result.pose,
-                    visualization_pose,
+                    processed_pose.raw_pose,
+                    processed_pose.output_pose,
                     previous_stable_pose,
                 )
-                previous_stable_pose = visualization_pose.copy()
+                previous_stable_pose = processed_pose.output_pose.copy()
 
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
             while True:
@@ -286,22 +269,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 track_result = manager.track_all(frame)[0]
                 print_result(track_result)
                 require_valid(track_result)
-                visualization_pose, visualization_label = _select_visualization_pose(
+                processed_pose = pose_processor.process(
                     track_result.pose,
                     track_result.source_frame_id,
-                    stabilizer,
-                    task_canonicalizer,
-                    args.z_axis_stabilization,
                 )
                 if args.z_axis_stabilization:
                     if track_result.source_frame_id % 30 == 0:
                         _print_stabilization_debug(
                             track_result.source_frame_id,
-                            track_result.pose,
-                            visualization_pose,
+                            processed_pose.raw_pose,
+                            processed_pose.output_pose,
                             previous_stable_pose,
                         )
-                    previous_stable_pose = visualization_pose.copy()
+                    previous_stable_pose = processed_pose.output_pose.copy()
                 track_fps = (
                     1.0 / track_result.processing_time_s
                     if track_result.processing_time_s > 0.0
@@ -310,7 +290,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 image = draw_pose_overlay(
                     rgb=frame.rgb,
                     K=frame.K,
-                    pose=visualization_pose,
+                    pose=processed_pose.output_pose,
                     bbox=tracker.bbox,
                     to_origin=tracker.to_origin,
                     fps=track_fps,

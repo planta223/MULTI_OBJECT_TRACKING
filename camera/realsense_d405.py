@@ -1,7 +1,14 @@
-"""Application adapter for the standalone RealSense D405 layer."""
+"""Map the sibling RealSenseD405 package to the application frame contract."""
 
 from config import CameraConfig
-from RealSenseD405.camera import D405Camera, D405Config
+
+try:
+    from realsense_d405 import D405Camera, D405Config
+except ImportError as error:
+    raise ImportError(
+        "The sibling RealSenseD405 package is required. Install it with "
+        "'python3 -m pip install -e ../RealSenseD405'."
+    ) from error
 
 from .base import CameraSource, FrameData
 
@@ -66,3 +73,9 @@ class RealSenseD405Source(CameraSource):
             host_wall_time_s=frame.host_wall_time_s,
             host_monotonic_time_s=frame.host_monotonic_time_s,
         )
+
+
+def create_source(config: CameraConfig) -> CameraSource:
+    """Factory hook used by :mod:`camera.factory`."""
+
+    return RealSenseD405Source(config)

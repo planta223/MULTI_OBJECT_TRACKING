@@ -8,8 +8,8 @@ tracking.
 
 ## Responsibilities
 
-    RealSenseD405/    D405 acquisition, aligned sensor frames, geometry, capture tools
-    camera/           Camera-neutral application contract and D405 adapter
+    ../RealSenseD405/ sibling D405 acquisition dependency (SDK and sensor tools)
+    camera/           Camera-neutral application contract and thin adapters
     segmentation/     Minimal interface and manual polygon implementation
     pose_estimation/  FoundationPose dependency boundary and pose result
     pose_processing/  Unchanged discrete assembly-task canonicalization
@@ -23,17 +23,24 @@ The output package is named pose_logging, not logging, because a top-level
 logging package would shadow Python's standard library and can break
 FoundationPose and third-party imports.
 
-## FoundationPose dependency
+## Sibling dependencies
 
-FoundationPose is not vendored. Install it at the configured default path:
+FoundationPose is not vendored. Its configured default path is the sibling
+checkout `/home/kkb/Workspace/FoundationPose`. Follow NVIDIA's instructions to
+build its native extensions and obtain model weights. A different checkout can
+be selected with `--foundationpose-root`.
+
+The D405 implementation is also a sibling dependency. Install it once in the
+same environment used to run this application:
 
     cd /home/kkb/Workspace/MULTI_OBJECT_TRACKING
-    git clone https://github.com/NVlabs/FoundationPose.git FoundationPose
+    python3 -m pip install -e ../RealSenseD405
 
-Then follow NVIDIA's instructions to build native extensions and obtain model
-weights. FoundationPose/ is ignored by this repository. A different checkout
-can be selected with --foundationpose-root, which is useful while validating
-against the existing /home/kkb/Workspace/FoundationPose checkout.
+Equivalently, `python3 -m pip install -r requirements-camera.txt` installs that
+editable local dependency. This avoids runtime `sys.path` modification and
+keeps the retained legacy `MULTI_OBJECT_TRACKING/RealSenseD405/` from
+shadowing the new package: application code imports the unambiguous lowercase
+module name `realsense_d405`.
 
 No local experimental scripts or modifications from the existing FoundationPose
 directory are copied into this dependency location.
@@ -59,13 +66,23 @@ candidates formed from Z rotations of 0/120/240 degrees and X rotations of
 
 ## D405 tools
 
-    python3 RealSenseD405/tools/inspect_camera.py
-    python3 RealSenseD405/tools/capture_rgbd.py
-    python3 RealSenseD405/tools/record_rgbd.py --duration 10
+    python3 -m realsense_d405.tools.inspect_camera
+    python3 -m realsense_d405.tools.capture_rgbd
+    python3 -m realsense_d405.tools.record_rgbd --duration 10
     python3 scripts/test_camera.py --duration 4
 
-Capture and recording output is stored below recordings/, which is ignored.
-The sensor layer contains no T-LESS, segmentation, or pose-estimation code.
+Capture and recording output defaults to `recordings/` below the current
+working directory. The sibling sensor package contains no T-LESS,
+segmentation, pose-estimation, tracking, or application visualization code.
+
+## Adding another camera
+
+Put the vendor-specific implementation in another sibling package, for
+example `../ZEDCamera/`. Add `camera/zed.py` with a `CameraSource` adapter and
+a `create_source(config)` hook, then select it with `--camera-type zed`. The
+factory imports only the selected adapter. Segmentation, pose estimation, and
+tracking continue to receive the same `FrameData` contract and do not import a
+vendor SDK.
 
 The previous offline T-LESS integration smoke path is retained outside the
 D405 sensor package:
@@ -90,12 +107,12 @@ layer without changing estimator or tracking contracts; see ros2/README.md.
 
 | Existing source | Migrated source |
 |---|---|
-| pipe_tracking/input/realsense_camera.py | RealSenseD405/camera.py plus camera/realsense_d405.py |
+| pipe_tracking/input/realsense_camera.py | ../RealSenseD405/src/realsense_d405/camera.py plus camera/realsense_d405.py |
 | pipe_tracking/core/frame_data.py | camera/base.py |
 | pipe_tracking/input/sequence_source.py | camera/sequence.py |
-| d405_study/src/geometry.py | RealSenseD405/geometry.py |
-| d405_study/capture_rgbd.py | RealSenseD405/tools/capture_rgbd.py |
-| d405_study/record_rgbd.py | RealSenseD405/tools/record_rgbd.py |
+| d405_study/src/geometry.py | ../RealSenseD405/src/realsense_d405/geometry.py |
+| d405_study/capture_rgbd.py | ../RealSenseD405/src/realsense_d405/tools/capture_rgbd.py |
+| d405_study/record_rgbd.py | ../RealSenseD405/src/realsense_d405/tools/record_rgbd.py |
 | pipe_tracking/segmentation/manual_segmentation.py | segmentation/manual/polygon_segmenter.py |
 | pipe_tracking/core/foundationpose_runtime.py | pose_estimation/foundationpose_runtime.py |
 | pipe_tracking/core/object_tracker.py | pose_estimation/foundationpose_tracker.py, exported as tracking.ObjectTracker |
@@ -107,5 +124,7 @@ layer without changing estimator or tracking contracts; see ros2/README.md.
 | pipe_tracking/scripts/smoke_test_realsense.py | scripts/test_camera.py |
 | pipe_tracking/scripts/smoke_test_tless.py | scripts/test_tless_smoke.py |
 
-The existing FoundationPose, d405_study, and pipe_tracking directories are
-migration sources and remain untouched until hardware regression is completed.
+The existing `MULTI_OBJECT_TRACKING/RealSenseD405`, `d405_study`, and
+`pipe_tracking` directories remain untouched until hardware regression is
+completed. They are migration sources, not runtime dependencies of the new
+adapter.

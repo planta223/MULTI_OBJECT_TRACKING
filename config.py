@@ -3,17 +3,18 @@
 from dataclasses import dataclass, field
 import math
 from pathlib import Path
+import re
 from typing import Optional, Tuple
 
 from constants import (
-    SUPPORTED_CAMERA_TYPES,
     SUPPORTED_OBJECT_COUNTS,
     SUPPORTED_SEGMENTATION_MODES,
 )
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-FOUNDATIONPOSE_ROOT = PROJECT_ROOT / "FoundationPose"
+WORKSPACE_ROOT = PROJECT_ROOT.parent
+FOUNDATIONPOSE_ROOT = WORKSPACE_ROOT / "FoundationPose"
 
 # Explicit application defaults. No object is configured until a real CAD is
 # supplied; in particular Pipe1 is not duplicated as a placeholder for Pipe2.
@@ -83,8 +84,14 @@ class AppConfig:
         return len(self.objects)
 
     def validate(self, check_model_paths: bool = False) -> None:
-        if self.camera.camera_type not in SUPPORTED_CAMERA_TYPES:
-            raise ValueError(f"Unsupported camera type: {self.camera.camera_type}")
+        if not isinstance(self.camera.camera_type, str) or re.fullmatch(
+            r"[a-z][a-z0-9_]*",
+            self.camera.camera_type,
+        ) is None:
+            raise ValueError(
+                "camera_type must name a lowercase module in camera/: "
+                f"{self.camera.camera_type!r}."
+            )
         if self.segmentation.mode not in SUPPORTED_SEGMENTATION_MODES:
             raise NotImplementedError(
                 f"Segmentation mode is not implemented: {self.segmentation.mode}"

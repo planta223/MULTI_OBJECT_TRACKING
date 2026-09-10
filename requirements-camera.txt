@@ -1,0 +1,2 @@
+# Install from MULTI_OBJECT_TRACKING so this relative editable path resolves.
+-e ../RealSenseD405

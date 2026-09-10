@@ -6,7 +6,6 @@ from enum import Enum
 PIPE1_ID = "pipe1"
 PIPE2_ID = "pipe2"
 SUPPORTED_OBJECT_COUNTS = (1, 2)
-SUPPORTED_CAMERA_TYPES = ("realsense_d405",)
 SUPPORTED_SEGMENTATION_MODES = ("manual",)
 
 AXIS_X = 0
