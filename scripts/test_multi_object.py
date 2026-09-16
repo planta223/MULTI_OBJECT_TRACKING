@@ -1,4 +1,4 @@
-"""Live dual-object regression for Pipe1 and Pipe2 with one camera frame."""
+"""Live dual-object camera regression using one frame for Pipe1 and Pipe2."""
 
 import argparse
 from pathlib import Path
@@ -70,6 +70,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--serial")
     parser.add_argument("--camera-type", default="realsense_d405")
+    parser.add_argument("--zed-resolution", default="HD720")
+    parser.add_argument("--zed-depth-mode", default="NEURAL")
     parser.add_argument(
         "--segmentation-mode",
         choices=SUPPORTED_SEGMENTATION_MODES,
@@ -223,6 +225,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         height=args.height,
         fps=args.fps,
         serial=args.serial,
+        zed_resolution=args.zed_resolution,
+        zed_depth_mode=args.zed_depth_mode,
     )
     foundationpose_config = FoundationPoseConfig(
         root=args.foundationpose_root.expanduser().resolve(),

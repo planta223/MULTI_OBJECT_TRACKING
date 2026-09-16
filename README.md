@@ -8,6 +8,7 @@ depends on the selected CAD, masks, scene, and FoundationPose environment.
 ## Responsibilities
 
     ../RealSenseD405/ sibling D405 acquisition dependency (SDK and sensor tools)
+    ../ZED2iCamera/   sibling ZED 2i acquisition dependency (ZED SDK adapter)
     camera/           Camera-neutral application contract and thin adapters
     segmentation/     Manual or YOLO initial-registration masks
     pose_estimation/  FoundationPose dependency boundary and pose result
@@ -43,6 +44,25 @@ module name `realsense_d405`.
 
 No local experimental scripts or modifications from the existing FoundationPose
 directory are copied into this dependency location.
+
+### Optional ZED 2i input
+
+Install the Stereolabs ZED SDK and its matching `pyzed` Python API in the same
+environment used by FoundationPose. `pyzed` is supplied by the SDK rather than
+as a normal portable PyPI dependency. On Linux the SDK installer places its
+Python installer under `/usr/local/zed`:
+
+    cd /usr/local/zed
+    python3 get_python_api.py
+    python3 -c "import pyzed.sl as sl; print('pyzed OK')"
+
+Then install the sibling package:
+
+    cd /home/kkb/Workspace/MULTI_OBJECT_TRACKING
+    python3 -m pip install -e ../ZED2iCamera
+
+The application factory imports only the selected camera adapter. A D405 run
+does not import `pyzed`, and a ZED run does not import `pyrealsense2`.
 
 ## Initial segmentation: manual or YOLO
 
@@ -133,11 +153,51 @@ Capture and recording output defaults to `recordings/` below the current
 working directory. The sibling sensor package contains no T-LESS,
 segmentation, pose-estimation, tracking, or application visualization code.
 
+## Camera selection and smoke tests
+
+The default remains `realsense_d405`. Select `zed2i` to use the same
+camera-neutral `FrameData` pipeline with ZED 2i. ZED defaults to its native
+HD720 left image (1280 x 720), 30 FPS, and NEURAL depth; `--width` and
+`--height` remain D405 stream settings.
+
+    python3 scripts/test_camera.py \
+      --camera-type realsense_d405 \
+      --duration 4 \
+      --preview
+
+    python3 scripts/test_camera.py \
+      --camera-type zed2i \
+      --zed-resolution HD720 \
+      --zed-depth-mode NEURAL \
+      --fps 30 \
+      --duration 4 \
+      --preview
+
+The ZED adapter retrieves the rectified BGRA left view, converts it to RGB,
+retrieves the depth measure aligned to that left view, requests meter units,
+normalizes invalid depth to `0.0`, and builds `K` once from the rectified-left
+calibration. Downstream segmentation and FoundationPose receive the same RGB,
+metric-depth, and intrinsic contract for either camera.
+
+Example dual-object ZED execution:
+
+    python3 scripts/test_multi_object.py \
+      --camera-type zed2i \
+      --zed-resolution HD720 \
+      --zed-depth-mode NEURAL \
+      --fps 30 \
+      --pipe1-model-path models/pipe1.obj \
+      --pipe2-model-path models/pipe2.obj \
+      --mesh-scale-to-meter 0.001
+
+The existing YOLO flags can be added unchanged. YOLO consumes `FrameData.rgb`
+and performs its own RGB-to-BGR conversion; camera adapters always output RGB.
+
 ## Adding another camera
 
-Put the vendor-specific implementation in another sibling package, for
-example `../ZEDCamera/`. Add `camera/zed.py` with a `CameraSource` adapter and
-a `create_source(config)` hook, then select it with `--camera-type zed`. The
+Put the vendor-specific implementation in another sibling package. Add a
+matching module under `camera/` with a `CameraSource` adapter and a
+`create_source(config)` hook, then select it with `--camera-type`. The
 factory imports only the selected adapter. Segmentation, pose estimation, and
 tracking continue to receive the same `FrameData` contract and do not import a
 vendor SDK.

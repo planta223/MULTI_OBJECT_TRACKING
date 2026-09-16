@@ -42,6 +42,8 @@ class CameraConfig:
     height: int = 480
     fps: int = 30
     serial: Optional[str] = None
+    zed_resolution: str = "HD720"
+    zed_depth_mode: str = "NEURAL"
 
 
 @dataclass(frozen=True)
@@ -117,6 +119,10 @@ class AppConfig:
                 )
         if self.camera.width <= 0 or self.camera.height <= 0 or self.camera.fps <= 0:
             raise ValueError("Camera width, height, and FPS must be positive.")
+        if not self.camera.zed_resolution:
+            raise ValueError("zed_resolution must not be empty.")
+        if not self.camera.zed_depth_mode:
+            raise ValueError("zed_depth_mode must not be empty.")
         if self.object_count not in SUPPORTED_OBJECT_COUNTS:
             raise ValueError(
                 "Configure one or two real objects; "

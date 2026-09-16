@@ -67,6 +67,31 @@ class FrameData:
 class CameraSource(ABC):
     """Minimal camera interface consumed by the tracking application."""
 
+    @property
+    def device_name(self) -> Optional[str]:
+        return None
+
+    @property
+    def device_serial(self) -> Optional[str]:
+        return None
+
+    @property
+    def depth_scale(self) -> float:
+        """Meters represented by one depth value; metric float sources use 1."""
+
+        return 1.0
+
+    @property
+    def color_stream_info(self):
+        return None
+
+    @property
+    def depth_stream_info(self):
+        return None
+
+    def raise_if_failed(self) -> None:
+        """Propagate asynchronous acquisition failures, if the source has any."""
+
     @abstractmethod
     def start(self) -> None:
         pass

@@ -1,4 +1,4 @@
-"""Regression test for the verified single-Pipe D405/FoundationPose path."""
+"""Live single-Pipe camera/FoundationPose regression."""
 
 import argparse
 import math
@@ -62,6 +62,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--serial")
     parser.add_argument("--camera-type", default="realsense_d405")
+    parser.add_argument("--zed-resolution", default="HD720")
+    parser.add_argument("--zed-depth-mode", default="NEURAL")
     parser.add_argument(
         "--segmentation-mode",
         choices=SUPPORTED_SEGMENTATION_MODES,
@@ -186,6 +188,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         height=args.height,
         fps=args.fps,
         serial=args.serial,
+        zed_resolution=args.zed_resolution,
+        zed_depth_mode=args.zed_depth_mode,
     )
     object_config = ObjectConfig(
         object_id=PIPE1_ID,

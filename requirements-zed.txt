@@ -1,0 +1,3 @@
+# Install the matching Stereolabs ZED SDK Python API first; pyzed is not a
+# normal portable PyPI dependency. Then install the local adapter package.
+-e ../ZED2iCamera
