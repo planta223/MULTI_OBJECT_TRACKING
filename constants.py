@@ -6,7 +6,7 @@ from enum import Enum
 PIPE1_ID = "pipe1"
 PIPE2_ID = "pipe2"
 SUPPORTED_OBJECT_COUNTS = (1, 2)
-SUPPORTED_SEGMENTATION_MODES = ("manual",)
+SUPPORTED_SEGMENTATION_MODES = ("manual", "yolo")
 
 AXIS_X = 0
 AXIS_Y = 1

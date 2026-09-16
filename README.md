@@ -9,7 +9,7 @@ depends on the selected CAD, masks, scene, and FoundationPose environment.
 
     ../RealSenseD405/ sibling D405 acquisition dependency (SDK and sensor tools)
     camera/           Camera-neutral application contract and thin adapters
-    segmentation/     Minimal interface and manual polygon implementation
+    segmentation/     Manual or YOLO initial-registration masks
     pose_estimation/  FoundationPose dependency boundary and pose result
     pose_processing/  Unchanged discrete assembly-task canonicalization
     tracking/         Object lifecycle and one/two-object orchestration
@@ -43,6 +43,65 @@ module name `realsense_d405`.
 
 No local experimental scripts or modifications from the existing FoundationPose
 directory are copied into this dependency location.
+
+## Initial segmentation: manual or YOLO
+
+Manual polygon selection remains the default and needs no YOLO dependency. To
+generate the initial FoundationPose registration mask automatically, install
+Ultralytics in the same Python/GPU environment used for FoundationPose:
+
+    python3 -m pip install -r requirements-yolo.txt
+
+The checked-out FoundationPose Dockerfile already installs
+`ultralytics==8.0.120`; the extra requirements file is for environments where
+Ultralytics is not already present. It deliberately leaves version selection
+to that environment instead of overriding its existing PyTorch/CUDA stack.
+
+YOLO mode requires a custom Ultralytics **instance-segmentation** `.pt` model.
+A detection-only model is rejected because bounding boxes are not sufficient
+for FoundationPose registration. Generic pretrained segmentation weights do
+not automatically recognize this project's Pipe class; train a segmentation
+model on the actual Pipe data.
+
+Place or copy the weight to a local path such as:
+
+    models/yolo/pipe_seg.pt
+
+Weight files below `models/yolo/` are intentionally ignored by Git, so copy
+them separately when moving the project to another PC.
+
+Single-object YOLO registration:
+
+    python3 scripts/test_single_object.py \
+      --model-path models/pipe1.obj \
+      --mesh-scale-to-meter 0.001 \
+      --segmentation-mode yolo \
+      --yolo-model-path models/yolo/pipe_seg.pt \
+      --yolo-confidence 0.5 \
+      --yolo-class-id 0 \
+      --yolo-device cuda:0
+
+Dual-object YOLO registration:
+
+    python3 scripts/test_multi_object.py \
+      --pipe1-model-path models/pipe1.obj \
+      --pipe2-model-path models/pipe2.obj \
+      --mesh-scale-to-meter 0.001 \
+      --segmentation-mode yolo \
+      --yolo-model-path models/yolo/pipe_seg.pt \
+      --yolo-confidence 0.5 \
+      --yolo-class-id 0 \
+      --yolo-device cuda:0
+
+`--yolo-class-id` and `--yolo-device` are optional. For two same-class
+instances, valid detections are filtered by class and confidence, the highest
+confidence two are selected, and their bounding-box centers are sorted so the
+left instance becomes `pipe1` and the right instance becomes `pipe2`. This is
+only an initial-registration rule; it is not identity tracking.
+
+YOLO runs once on the frozen registration frame. After registration,
+FoundationPose handles every frame through its existing `track_one()` path.
+There is no automatic YOLO re-registration after tracking loss.
 
 ## Current single-object regression
 

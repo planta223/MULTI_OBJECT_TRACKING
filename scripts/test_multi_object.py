@@ -23,15 +23,13 @@ from config import (
     FoundationPoseConfig,
     ObjectConfig,
     OutputConfig,
+    SegmentationConfig,
 )
-from constants import PIPE1_ID, PIPE2_ID
+from constants import PIPE1_ID, PIPE2_ID, SUPPORTED_SEGMENTATION_MODES
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
 from pose_estimation.pose_result import PoseResult
 from pose_processing.object_pose_processor import ObjectPoseProcessor
-from segmentation.manual.polygon_segmenter import (
-    ManualPolygonSegmenter,
-    SegmentationCancelled,
-)
+from segmentation import SegmentationCancelled, create_segmenter
 from tracking.tracking_manager import TrackingManager
 from visualization.visualization import draw_pose_overlay_on_bgr
 
@@ -72,6 +70,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--serial")
     parser.add_argument("--camera-type", default="realsense_d405")
+    parser.add_argument(
+        "--segmentation-mode",
+        choices=SUPPORTED_SEGMENTATION_MODES,
+        default="manual",
+    )
+    parser.add_argument("--yolo-model-path", type=Path)
+    parser.add_argument("--yolo-confidence", type=float, default=0.5)
+    parser.add_argument("--yolo-device")
+    parser.add_argument("--yolo-class-id", type=int)
     parser.add_argument("--warmup-seconds", type=float, default=1.0)
     parser.add_argument("--register-refine-iter", type=int, default=5)
     parser.add_argument("--track-refine-iter", type=int, default=2)
@@ -107,6 +114,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--axis-length-m must be finite and positive.")
     if args.debug < 0:
         parser.error("--debug must be non-negative.")
+    if not np.isfinite(args.yolo_confidence) or not 0 <= args.yolo_confidence <= 1:
+        parser.error("--yolo-confidence must be in [0, 1].")
+    if args.yolo_class_id is not None and args.yolo_class_id < 0:
+        parser.error("--yolo-class-id must be non-negative.")
+    if args.segmentation_mode == "yolo" and args.yolo_model_path is None:
+        parser.error("--yolo-model-path is required with --segmentation-mode yolo.")
     return args
 
 
@@ -217,6 +230,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_refine_iter=args.track_refine_iter,
         debug=args.debug,
     )
+    segmentation_config = SegmentationConfig(
+        mode=args.segmentation_mode,
+        model_path=(
+            None
+            if args.yolo_model_path is None
+            else args.yolo_model_path.expanduser().resolve()
+        ),
+        confidence=args.yolo_confidence,
+        device=args.yolo_device,
+        class_id=args.yolo_class_id,
+    )
     object_configs = (
         ObjectConfig(
             object_id=PIPE1_ID,
@@ -244,11 +268,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 enable_relative_pose=False,
             ),
             camera=camera_config,
+            segmentation=segmentation_config,
             foundationpose=foundationpose_config,
             objects=object_configs,
             output=OutputConfig(output_dir=Path(debug_dir)),
         )
         app_config.validate(check_model_paths=True)
+        segmenter = create_segmenter(
+            app_config.segmentation,
+            (PIPE1_ID, PIPE2_ID),
+        )
 
         runtime = FoundationPoseRuntime(foundationpose_config.root)
         manager = TrackingManager(app_config, runtime=runtime)
@@ -282,9 +311,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             camera.raise_if_failed()
             frozen_frame = camera.get_next_frame()
             print(f"Frozen frame for both masks: {frozen_frame.source_frame_id}")
-            print("Select the Pipe1 mask, then select the Pipe2 mask.")
+            if args.segmentation_mode == "manual":
+                print("Select the Pipe1 mask, then select the Pipe2 mask.")
+            else:
+                print("Running YOLO initial instance segmentation.")
 
-            segmenter = ManualPolygonSegmenter((PIPE1_ID, PIPE2_ID))
             masks = segmenter.segment(frozen_frame)
             for processor in processors.values():
                 processor.reset()

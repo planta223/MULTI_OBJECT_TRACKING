@@ -62,6 +62,10 @@ class ObjectConfig:
 @dataclass(frozen=True)
 class SegmentationConfig:
     mode: str = SEGMENTATION_MODE
+    model_path: Optional[Path] = None
+    confidence: float = 0.5
+    device: Optional[str] = None
+    class_id: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -96,6 +100,21 @@ class AppConfig:
             raise NotImplementedError(
                 f"Segmentation mode is not implemented: {self.segmentation.mode}"
             )
+        if (
+            not math.isfinite(self.segmentation.confidence)
+            or not 0.0 <= self.segmentation.confidence <= 1.0
+        ):
+            raise ValueError("Segmentation confidence must be in [0, 1].")
+        if self.segmentation.class_id is not None and self.segmentation.class_id < 0:
+            raise ValueError("Segmentation class_id must be non-negative.")
+        if self.segmentation.mode == "yolo":
+            if self.segmentation.model_path is None:
+                raise ValueError("YOLO segmentation requires a model_path.")
+            if check_model_paths and not Path(self.segmentation.model_path).is_file():
+                raise FileNotFoundError(
+                    "YOLO segmentation model not found: "
+                    f"{self.segmentation.model_path}"
+                )
         if self.camera.width <= 0 or self.camera.height <= 0 or self.camera.fps <= 0:
             raise ValueError("Camera width, height, and FPS must be positive.")
         if self.object_count not in SUPPORTED_OBJECT_COUNTS:

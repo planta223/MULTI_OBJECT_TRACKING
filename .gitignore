@@ -18,6 +18,8 @@ venv/
 /weights/
 *.log
 *.mp4
+/models/yolo/*.pt
+/models/yolo/*.pth
 
 # Editor and OS files
 .vscode/

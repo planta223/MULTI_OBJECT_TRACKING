@@ -23,18 +23,16 @@ from config import (
     FoundationPoseConfig,
     ObjectConfig,
     OutputConfig,
+    SegmentationConfig,
 )
-from constants import PIPE1_ID
+from constants import PIPE1_ID, SUPPORTED_SEGMENTATION_MODES
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
 from pose_processing.object_pose_processor import ObjectPoseProcessor
 from pose_estimation.pose_result import PoseResult
 from tracking.tracking_manager import TrackingManager
 from camera import create_camera_source
 from visualization.visualization import draw_pose_overlay
-from segmentation.manual.polygon_segmenter import (
-    ManualPolygonSegmenter,
-    SegmentationCancelled,
-)
+from segmentation import SegmentationCancelled, create_segmenter
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -64,6 +62,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--serial")
     parser.add_argument("--camera-type", default="realsense_d405")
+    parser.add_argument(
+        "--segmentation-mode",
+        choices=SUPPORTED_SEGMENTATION_MODES,
+        default="manual",
+    )
+    parser.add_argument("--yolo-model-path", type=Path)
+    parser.add_argument("--yolo-confidence", type=float, default=0.5)
+    parser.add_argument("--yolo-device")
+    parser.add_argument("--yolo-class-id", type=int)
     parser.add_argument("--warmup-seconds", type=float, default=1.0)
     parser.add_argument("--register-refine-iter", type=int, default=5)
     parser.add_argument("--track-refine-iter", type=int, default=2)
@@ -98,6 +105,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--mesh-scale-to-meter must be positive.")
     if args.axis_length_m <= 0:
         parser.error("--axis-length-m must be positive.")
+    if not np.isfinite(args.yolo_confidence) or not 0 <= args.yolo_confidence <= 1:
+        parser.error("--yolo-confidence must be in [0, 1].")
+    if args.yolo_class_id is not None and args.yolo_class_id < 0:
+        parser.error("--yolo-class-id must be non-negative.")
+    if args.segmentation_mode == "yolo" and args.yolo_model_path is None:
+        parser.error("--yolo-model-path is required with --segmentation-mode yolo.")
     return args
 
 
@@ -185,6 +198,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         track_refine_iter=args.track_refine_iter,
         debug=args.debug,
     )
+    segmentation_config = SegmentationConfig(
+        mode=args.segmentation_mode,
+        model_path=(
+            None
+            if args.yolo_model_path is None
+            else args.yolo_model_path.expanduser().resolve()
+        ),
+        confidence=args.yolo_confidence,
+        device=args.yolo_device,
+        class_id=args.yolo_class_id,
+    )
     camera = create_camera_source(camera_config)
     window_name = "Pipe1 live FoundationPose"
 
@@ -200,11 +224,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 enable_relative_pose=False,
             ),
             camera=camera_config,
+            segmentation=segmentation_config,
             foundationpose=foundationpose_config,
             objects=(object_config,),
             output=OutputConfig(output_dir=Path(debug_dir)),
         )
         app_config.validate(check_model_paths=True)
+        segmenter = create_segmenter(app_config.segmentation, (PIPE1_ID,))
 
         runtime = FoundationPoseRuntime(args.foundationpose_root)
         manager = TrackingManager(app_config, runtime=runtime)
@@ -234,7 +260,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             frozen_frame = camera.get_next_frame()
             print(f"Frozen frame for mask: {frozen_frame.source_frame_id}")
 
-            segmenter = ManualPolygonSegmenter((PIPE1_ID,))
             masks = segmenter.segment(frozen_frame)
             # A new registration starts a new application-level stable basis.
             # FoundationPose retains its own independent raw pose chain.
