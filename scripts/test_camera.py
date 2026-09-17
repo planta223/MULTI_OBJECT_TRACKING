@@ -25,11 +25,19 @@ def parse_args():
     parser.add_argument("--serial")
     parser.add_argument("--zed-resolution", default="HD720")
     parser.add_argument("--zed-depth-mode", default="NEURAL")
+    parser.add_argument("--ros-color-topic", default="/cam/color/compressed")
+    parser.add_argument("--ros-depth-topic", default="/cam/depth/compressed")
+    parser.add_argument(
+        "--ros-camera-info-topic", default="/cam/color/camera_info"
+    )
+    parser.add_argument("--ros-frame-timeout-sec", type=float, default=2.0)
     parser.add_argument("--duration", type=float, default=4.0)
     parser.add_argument("--preview", action="store_true")
     args = parser.parse_args()
     if args.duration <= 0:
         parser.error("--duration must be positive")
+    if args.ros_frame_timeout_sec <= 0:
+        parser.error("--ros-frame-timeout-sec must be positive")
     return args
 
 
@@ -44,6 +52,10 @@ def main() -> int:
             serial=args.serial,
             zed_resolution=args.zed_resolution,
             zed_depth_mode=args.zed_depth_mode,
+            ros_color_topic=args.ros_color_topic,
+            ros_depth_topic=args.ros_depth_topic,
+            ros_camera_info_topic=args.ros_camera_info_topic,
+            ros_frame_timeout_sec=args.ros_frame_timeout_sec,
         )
     )
     observed_ids = []

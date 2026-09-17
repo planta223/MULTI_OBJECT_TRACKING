@@ -72,6 +72,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--camera-type", default="realsense_d405")
     parser.add_argument("--zed-resolution", default="HD720")
     parser.add_argument("--zed-depth-mode", default="NEURAL")
+    parser.add_argument("--ros-color-topic", default="/cam/color/compressed")
+    parser.add_argument("--ros-depth-topic", default="/cam/depth/compressed")
+    parser.add_argument(
+        "--ros-camera-info-topic", default="/cam/color/camera_info"
+    )
+    parser.add_argument("--ros-frame-timeout-sec", type=float, default=2.0)
     parser.add_argument(
         "--segmentation-mode",
         choices=SUPPORTED_SEGMENTATION_MODES,
@@ -108,6 +114,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("Camera width, height, and FPS must be positive.")
     if args.warmup_seconds < 0:
         parser.error("--warmup-seconds must be non-negative.")
+    if args.ros_frame_timeout_sec <= 0:
+        parser.error("--ros-frame-timeout-sec must be positive.")
     if args.register_refine_iter <= 0 or args.track_refine_iter <= 0:
         parser.error("FoundationPose iterations must be positive.")
     if not np.isfinite(args.mesh_scale_to_meter) or args.mesh_scale_to_meter <= 0:
@@ -227,6 +235,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         serial=args.serial,
         zed_resolution=args.zed_resolution,
         zed_depth_mode=args.zed_depth_mode,
+        ros_color_topic=args.ros_color_topic,
+        ros_depth_topic=args.ros_depth_topic,
+        ros_camera_info_topic=args.ros_camera_info_topic,
+        ros_frame_timeout_sec=args.ros_frame_timeout_sec,
     )
     foundationpose_config = FoundationPoseConfig(
         root=args.foundationpose_root.expanduser().resolve(),

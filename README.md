@@ -155,8 +155,9 @@ segmentation, pose-estimation, tracking, or application visualization code.
 
 ## Camera selection and smoke tests
 
-The default remains `realsense_d405`. Select `zed2i` to use the same
-camera-neutral `FrameData` pipeline with ZED 2i. ZED defaults to its native
+The default remains `realsense_d405`. Select `zed2i` for direct SDK input or
+`ros_zed` for the existing host-side `cam_zed.py` ROS2 topics. Direct ZED
+defaults to its native
 HD720 left image (1280 x 720), 30 FPS, and NEURAL depth; `--width` and
 `--height` remain D405 stream settings.
 
@@ -172,6 +173,31 @@ HD720 left image (1280 x 720), 30 FPS, and NEURAL depth; `--width` and
       --fps 30 \
       --duration 4 \
       --preview
+
+    python3 scripts/test_camera.py \
+      --camera-type ros_zed \
+      --ros-color-topic /cam/color/compressed \
+      --ros-depth-topic /cam/depth/compressed \
+      --ros-camera-info-topic /cam/color/camera_info \
+      --duration 4 \
+      --preview
+
+For the current Humble-host/Foxy-container deployment, source Foxy and select
+the checked-in UDP-only Fast DDS participant profile before starting a Docker
+subscriber process:
+
+    source /opt/ros/foxy/setup.bash
+    export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    export ROS_DOMAIN_ID=10
+    export FASTRTPS_DEFAULT_PROFILES_FILE="$PWD/ros2/fastdds_udp.xml"
+
+The profile was added only after direct bidirectional `std_msgs/String` tests
+proved that the default cross-user transport path did not carry user data,
+while UDP-only carried CameraInfo and both compressed image streams. A
+container probe using the host publisher's UID 1000 also worked with default
+transports, isolating the issue to the SHM path between the UID-1000 publisher
+and root subscriber rather than Foxy/Humble compatibility alone. The host
+publisher remains unchanged and can continue using its default transport.
 
 The ZED adapter retrieves the rectified BGRA left view, converts it to RGB,
 retrieves the depth measure aligned to that left view, requests meter units,
@@ -229,8 +255,10 @@ Task symmetry and Z-axis stabilization are both off by default.
 dual-object D405 accuracy and performance must be checked with both physical
 objects present.
 
-ROS2 is not imported by the core. A future node can replace the orchestration
-layer without changing estimator or tracking contracts; see ros2/README.md.
+ROS2 is not imported by the core or by non-ROS camera runs. The `ros_zed`
+adapter imports it lazily only when started and normalizes the existing
+publisher interface into the same `FrameData` contract. See
+`../ZED2i_ROS/README.md` for the host/container boundary and commands.
 
 ## Migration map
 

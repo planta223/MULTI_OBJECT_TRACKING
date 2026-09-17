@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  Fast DDS 2.1.x/2.6.x-compatible UDPv4-only participant profile.
+
+  This profile is required by the ROS2 Foxy subscriber in the current
+  host-network/host-IPC deployment. The host publisher runs as UID 1000 while
+  the container workload normally runs as root. Default SHM communication
+  failed across those users; a UID-1000 container probe or UDP-only transport
+  both restored delivery. UDP-only avoids changing the container's runtime
+  user and delivered both small messages and the compressed ZED streams.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <transport_descriptors>
+        <transport_descriptor>
+            <transport_id>pipe_align_udp_v4</transport_id>
+            <type>UDPv4</type>
+        </transport_descriptor>
+    </transport_descriptors>
+    <participant profile_name="pipe_align_udp_only" is_default_profile="true">
+        <rtps>
+            <userTransports>
+                <transport_id>pipe_align_udp_v4</transport_id>
+            </userTransports>
+            <useBuiltinTransports>false</useBuiltinTransports>
+        </rtps>
+    </participant>
+</profiles>

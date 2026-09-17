@@ -44,6 +44,11 @@ class CameraConfig:
     serial: Optional[str] = None
     zed_resolution: str = "HD720"
     zed_depth_mode: str = "NEURAL"
+    ros_color_topic: str = "/cam/color/compressed"
+    ros_depth_topic: str = "/cam/depth/compressed"
+    ros_camera_info_topic: str = "/cam/color/camera_info"
+    ros_frame_timeout_sec: float = 2.0
+    ros_node_name: str = "foundationpose_ros_zed"
 
 
 @dataclass(frozen=True)
@@ -123,6 +128,22 @@ class AppConfig:
             raise ValueError("zed_resolution must not be empty.")
         if not self.camera.zed_depth_mode:
             raise ValueError("zed_depth_mode must not be empty.")
+        if self.camera.camera_type == "ros_zed":
+            for field_name in (
+                "ros_color_topic",
+                "ros_depth_topic",
+                "ros_camera_info_topic",
+                "ros_node_name",
+            ):
+                if not getattr(self.camera, field_name):
+                    raise ValueError(f"{field_name} must not be empty.")
+            if (
+                not math.isfinite(self.camera.ros_frame_timeout_sec)
+                or self.camera.ros_frame_timeout_sec <= 0
+            ):
+                raise ValueError(
+                    "ros_frame_timeout_sec must be finite and positive."
+                )
         if self.object_count not in SUPPORTED_OBJECT_COUNTS:
             raise ValueError(
                 "Configure one or two real objects; "
