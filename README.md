@@ -72,10 +72,11 @@ Ultralytics in the same Python/GPU environment used for FoundationPose:
 
     python3 -m pip install -r requirements-yolo.txt
 
-The checked-out FoundationPose Dockerfile already installs
-`ultralytics==8.0.120`; the extra requirements file is for environments where
-Ultralytics is not already present. It deliberately leaves version selection
-to that environment instead of overriding its existing PyTorch/CUDA stack.
+The FoundationPose image may contain `ultralytics==8.0.120`, which cannot load
+YOLO11 checkpoints containing modules such as `C3k2` and `C2PSA`. Install the
+optional requirements file to use the verified `ultralytics==8.3.0` runtime.
+Run the install in the existing FoundationPose environment so pip can retain
+its already-compatible PyTorch/CUDA packages.
 
 YOLO mode requires a custom Ultralytics **instance-segmentation** `.pt` model.
 A detection-only model is rejected because bounding boxes are not sufficient
