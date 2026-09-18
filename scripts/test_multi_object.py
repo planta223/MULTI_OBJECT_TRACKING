@@ -87,6 +87,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--yolo-confidence", type=float, default=0.5)
     parser.add_argument("--yolo-device")
     parser.add_argument("--yolo-class-id", type=int)
+    parser.add_argument(
+        "--show-auto-mask",
+        action="store_true",
+        help="Show and save the YOLO masks before FoundationPose registration.",
+    )
     parser.add_argument("--warmup-seconds", type=float, default=1.0)
     parser.add_argument("--register-refine-iter", type=int, default=5)
     parser.add_argument("--track-refine-iter", type=int, default=2)
@@ -130,6 +135,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--yolo-class-id must be non-negative.")
     if args.segmentation_mode == "yolo" and args.yolo_model_path is None:
         parser.error("--yolo-model-path is required with --segmentation-mode yolo.")
+    if args.show_auto_mask and args.segmentation_mode != "yolo":
+        parser.error("--show-auto-mask requires --segmentation-mode yolo.")
     return args
 
 
@@ -333,6 +340,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 print("Running YOLO initial instance segmentation.")
 
             masks = segmenter.segment(frozen_frame)
+
+            if args.show_auto_mask:
+                mask_vis = cv2.cvtColor(frozen_frame.rgb, cv2.COLOR_RGB2BGR)
+                overlay = mask_vis.copy()
+
+                # BGR: pipe1=yellow, pipe2=magenta
+                overlay[masks[PIPE1_ID]] = (0, 255, 255)
+                overlay[masks[PIPE2_ID]] = (255, 0, 255)
+
+                mask_vis = cv2.addWeighted(mask_vis, 0.6, overlay, 0.4, 0)
+
+                mask_window_name = "YOLO initial masks - press any key"
+                cv2.imshow(mask_window_name, mask_vis)
+                cv2.imwrite("yolo_initial_masks.png", mask_vis)
+                cv2.waitKey(0)
+                cv2.destroyWindow(mask_window_name)
+
             for processor in processors.values():
                 processor.reset()
 
