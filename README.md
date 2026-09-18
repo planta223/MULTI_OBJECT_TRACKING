@@ -189,7 +189,7 @@ subscriber process:
 
     source /opt/ros/foxy/setup.bash
     export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-    export ROS_DOMAIN_ID=10
+    export ROS_DOMAIN_ID=8
     export FASTRTPS_DEFAULT_PROFILES_FILE="$PWD/ros2/fastdds_udp.xml"
 
 The profile was added only after direct bidirectional `std_msgs/String` tests
@@ -219,6 +219,62 @@ Example dual-object ZED execution:
 
 The existing YOLO flags can be added unchanged. YOLO consumes `FrameData.rgb`
 and performs its own RGB-to-BGR conversion; camera adapters always output RGB.
+
+## Unit-task-triggered FoundationPose worker
+
+`scripts/run_task_supervisor.py` is a lightweight ROS2 process that does not
+import YOLO, FoundationPose, or CUDA. It subscribes to
+`/recog/unit_task/result` (`std_msgs/msg/Int8`), starts the dual-object worker
+once when task 4 begins, keeps it running through task 5, and terminates the
+worker process group when task 6 begins. Terminating the worker releases its
+CUDA context and GPU memory while the ZED publisher and supervisor remain
+alive. If task messages disappear while the worker is active, the default
+two-second watchdog also stops it.
+
+Start this supervisor inside the FoundationPose container before starting the
+unit-task publisher. Arguments after `--` are the unchanged worker command:
+
+    source /opt/ros/foxy/setup.bash
+    export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    export ROS_DOMAIN_ID=8
+    export FASTRTPS_DEFAULT_PROFILES_FILE="$PWD/ros2/fastdds_udp.xml"
+
+    /usr/bin/python3 scripts/run_task_supervisor.py \
+      --task-topic /recog/unit_task/result \
+      --start-task-id 4 \
+      --stop-task-id 6 \
+      -- \
+      /opt/conda/envs/my/bin/python scripts/test_multi_object.py \
+        --foundationpose-root /home/rico/Pipe_Align_kkb/FoundationPose \
+        --camera-type ros_zed \
+        --ros-color-topic /cam/color/compressed \
+        --ros-depth-topic /cam/depth/compressed \
+        --ros-camera-info-topic /cam/color/camera_info \
+        --pipe1-model-path models/pipe1.obj \
+        --pipe2-model-path models/pipe2.obj \
+        --mesh-scale-to-meter 0.001 \
+        --segmentation-mode yolo \
+        --yolo-model-path models/yolo/pipe_seg.pt \
+        --yolo-confidence 0.5 \
+        --yolo-class-id 0 \
+        --yolo-device cuda:0 \
+        --z-axis-stabilization
+
+Keep the host-side ZED publisher running with `zed_cam`. After the supervisor
+reports that it is waiting on the task topic, run the dummy publisher on the
+host in the same ROS domain:
+
+    cd /home/rico/GT_unit_task_260731/unit_task_dummy
+    source /opt/ros/humble/setup.bash
+    export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    export ROS_DOMAIN_ID=8
+    /usr/bin/python3 dummy_unit_task_publisher.py
+
+Do not add `--show-auto-mask` to an unattended worker command because its
+blocking confirmation window can consume the task-4 interval. Repeated task-4
+or task-6 messages do not repeatedly start or stop the worker. A supervisor
+that first connects during task 5 waits for the next task-4 transition rather
+than starting tracking without the intended registration trigger.
 
 ## Adding another camera
 
