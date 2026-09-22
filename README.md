@@ -80,6 +80,8 @@ FoundationPose 이미지에 포함될 수 있는 `ultralytics==8.0.120`은 `C3k2
 `ultralytics==8.3.0`을 사용하려면 선택 의존성 파일을 설치한다. 기존
 PyTorch/CUDA 조합이 유지되도록 FoundationPose 환경에서 설치해야 한다.
 
+### YOLO 모델 가중치 준비
+
 YOLO 모드는 사용자 학습 Ultralytics **instance segmentation** `.pt` 모델이
 필요하다. Bounding box만 반환하는 detection 모델은 FoundationPose
 registration에 충분하지 않으므로 거부한다. 범용 사전 학습 모델은 이
@@ -92,6 +94,8 @@ registration에 충분하지 않으므로 거부한다. 범용 사전 학습 모
 
 `models/yolo/` 아래 가중치는 Git에서 의도적으로 제외된다. 프로젝트를 다른
 PC로 옮길 때 별도로 복사해야 한다.
+
+### YOLO 실행 예시
 
 단일 객체 YOLO registration:
 
