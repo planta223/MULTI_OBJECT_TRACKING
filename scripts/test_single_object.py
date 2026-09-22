@@ -277,7 +277,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pose_publisher = None
         try:
             camera.start()
-            if args.camera_type == "ros_zed":
+            if args.camera_type == "cam_ros_zed2i":
                 # This is the single-object LEFT-Pipe entrypoint, so Pipe1 has
                 # an explicit role here.  Reuse the camera subscriber node;
                 # rclpy publish() enqueues a best-effort depth-one sample and

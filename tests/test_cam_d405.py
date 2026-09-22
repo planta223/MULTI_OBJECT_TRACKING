@@ -1,4 +1,4 @@
-"""CPU-only contract test for the D405 application adapter."""
+"""CPU-only contract test for the direct D405 camera adapter."""
 
 from unittest.mock import patch
 
@@ -6,7 +6,7 @@ import numpy as np
 
 from camera.base import FrameData
 from camera.factory import create_camera_source
-from camera.realsense_d405 import RealSenseD405Source
+from camera.cam_d405 import RealSenseD405Source
 from config import CameraConfig
 from realsense_d405 import D405Frame
 
@@ -46,8 +46,8 @@ class FakeD405Camera:
 
 
 def test_adapter_maps_sensor_frame_to_application_contract() -> None:
-    with patch("camera.realsense_d405.D405Camera", FakeD405Camera):
-        source = RealSenseD405Source(CameraConfig(camera_type="realsense_d405"))
+    with patch("camera.cam_d405.D405Camera", FakeD405Camera):
+        source = RealSenseD405Source(CameraConfig(camera_type="cam_d405"))
         source.start()
         frame = source.get_next_frame()
 
@@ -65,7 +65,7 @@ def test_adapter_maps_sensor_frame_to_application_contract() -> None:
 
 
 def test_factory_loads_selected_adapter_lazily() -> None:
-    with patch("camera.realsense_d405.D405Camera", FakeD405Camera):
-        source = create_camera_source(CameraConfig(camera_type="realsense_d405"))
+    with patch("camera.cam_d405.D405Camera", FakeD405Camera):
+        source = create_camera_source(CameraConfig(camera_type="cam_d405"))
 
     assert isinstance(source, RealSenseD405Source)

@@ -67,7 +67,7 @@ camera publisher so every downstream consumer receives the same basis.
 ## LEFT/RIGHT identity
 
 The single-object entrypoint is explicitly the LEFT-Pipe path, so its sole
-`pipe1` tracker is published automatically when `--camera-type ros_zed` is
+`pipe1` tracker is published automatically when `--camera-type cam_ros_zed2i` is
 used. This contract still depends on its registration mask actually selecting
 the left-hand grasped Pipe. If multiple indistinguishable Pipe instances are
 visible, single-object YOLO chooses the highest-confidence instance and cannot
@@ -112,7 +112,7 @@ The Python test command used for the ROS output path is:
 
     cd /home/rico/Pipe_Align_kkb/MULTI_OBJECT_TRACKING
     /usr/bin/python3 -m pytest -q \
-      tests/test_ros_zed_adapter.py \
+      tests/test_cam_ros_zed2i.py \
       tests/test_ros_pose_publisher.py \
       tests/test_multi_object_flow.py \
       tests/test_task_supervisor.py \
@@ -134,7 +134,7 @@ For the current single LEFT Pipe scope:
 
     /opt/conda/envs/my/bin/python run_tracking.py \
       --foundationpose-root /home/rico/Pipe_Align_kkb/FoundationPose \
-      --camera-type ros_zed \
+      --camera-type cam_ros_zed2i \
       --model-path models/pipe1.obj \
       --mesh-scale-to-meter 0.001 \
       --segmentation-mode yolo \
@@ -148,7 +148,7 @@ For the existing dual worker, append the verified mapping, for example:
 
     /opt/conda/envs/my/bin/python scripts/test_multi_object.py \
       --foundationpose-root /home/rico/Pipe_Align_kkb/FoundationPose \
-      --camera-type ros_zed \
+      --camera-type cam_ros_zed2i \
       --pipe1-model-path models/pipe1.obj \
       --pipe2-model-path models/pipe2.obj \
       --segmentation-mode yolo \
@@ -214,7 +214,7 @@ Representative output shape (numbers are illustrative only):
    host/container firewalls. `ros2 multicast receive` on one PC and
    `ros2 multicast send` on the other is a useful first check.
 5. Run `ros2 node list` and `ros2 topic list` on Control. It should discover
-   `/foundationpose_ros_zed` and `/vision/left_pipe/pose`.
+   `/foundationpose_cam_ros_zed2i` and `/vision/left_pipe/pose`.
 6. Run `ros2 topic info -v /vision/left_pipe/pose` on Control and verify one
    publisher with compatible BEST_EFFORT QoS, then run `echo` and `hz` there.
 7. If discovery is stale after environment changes, run `ros2 daemon stop`

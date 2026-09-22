@@ -17,8 +17,8 @@ class ZED2iSource(CameraSource):
     """Convert ZED 2i sensor frames into camera-neutral application frames."""
 
     def __init__(self, config: CameraConfig) -> None:
-        if config.camera_type != "zed2i":
-            raise ValueError(f"Expected zed2i, got {config.camera_type!r}.")
+        if config.camera_type != "cam_zed2i":
+            raise ValueError(f"Expected cam_zed2i, got {config.camera_type!r}.")
         self._camera = ZED2iCamera(
             ZED2iConfig(
                 resolution=config.zed_resolution,

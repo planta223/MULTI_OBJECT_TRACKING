@@ -12,7 +12,7 @@ cd /home/rico/Pipe_Align_kkb/MULTI_OBJECT_TRACKING
 
 ```bash
 /usr/bin/python3 -m pytest -q \
-  tests/test_ros_zed_adapter.py \
+  tests/test_cam_ros_zed2i.py \
   tests/test_ros_pose_publisher.py \
   tests/test_multi_object_flow.py \
   tests/test_task_supervisor.py \
@@ -47,13 +47,13 @@ PYTHONPATH="$PWD/../RealSenseD405/src:$PWD/../ZED2iCamera/src" \
 
 | 파일 | 검증 범위 |
 |---|---|
-| `test_ros_zed_adapter.py` | ROS 이미지 디코딩, 정확한 timestamp 동기화, 프레임 검증 |
+| `test_cam_ros_zed2i.py` | ROS 이미지 디코딩, 정확한 timestamp 동기화, 프레임 검증 |
 | `test_ros_pose_publisher.py` | Pose 검증과 ROS pose/status 메시지 생성 |
 | `test_multi_object_flow.py` | 이중 객체 설정, tracker 격리, mask 및 overlay |
 | `test_task_supervisor.py` | Task 3 preload, task 4 활성화, task 6 종료 및 timeout 처리 |
 | `test_yolo_segmenter.py` | YOLO 필터링, 좌우 객체 배정, mask 정규화 |
-| `test_realsense_d405_adapter.py` | 선택 사항인 D405 adapter 계약 |
-| `test_zed2i_adapter.py` | 선택 사항인 ZED SDK 직접 연결 adapter 계약 |
+| `test_cam_d405.py` | 선택 사항인 D405 adapter 계약 |
+| `test_cam_zed2i.py` | 선택 사항인 ZED SDK 직접 연결 adapter 계약 |
 
 이 테스트들은 CPU 수준의 회귀 테스트다. 실제 ROS 전송, 카메라 정확도,
 FoundationPose GPU 추론 및 task 지연시간은 측정하지 않는다.

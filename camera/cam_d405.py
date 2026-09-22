@@ -17,8 +17,8 @@ class RealSenseD405Source(CameraSource):
     """Convert D405 sensor frames into camera-neutral application frames."""
 
     def __init__(self, config: CameraConfig) -> None:
-        if config.camera_type != "realsense_d405":
-            raise ValueError(f"Expected realsense_d405, got {config.camera_type!r}.")
+        if config.camera_type != "cam_d405":
+            raise ValueError(f"Expected cam_d405, got {config.camera_type!r}.")
         self._camera = D405Camera(
             D405Config(
                 width=config.width,

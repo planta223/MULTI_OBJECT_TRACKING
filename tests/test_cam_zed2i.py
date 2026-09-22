@@ -1,4 +1,4 @@
-"""CPU-only contract tests for the ZED 2i application adapter."""
+"""CPU-only contract tests for the direct ZED 2i camera adapter."""
 
 from unittest.mock import patch
 
@@ -6,7 +6,7 @@ import numpy as np
 
 from camera.base import FrameData
 from camera.factory import create_camera_source
-from camera.zed2i import ZED2iSource
+from camera.cam_zed2i import ZED2iSource
 from config import CameraConfig
 from zed2i_camera import ZED2iFrame
 
@@ -48,13 +48,13 @@ class FakeZED2iCamera:
 
 def test_adapter_maps_zed_frame_to_application_contract() -> None:
     config = CameraConfig(
-        camera_type="zed2i",
+        camera_type="cam_zed2i",
         fps=30,
         serial="123456",
         zed_resolution="HD720",
         zed_depth_mode="NEURAL",
     )
-    with patch("camera.zed2i.ZED2iCamera", FakeZED2iCamera):
+    with patch("camera.cam_zed2i.ZED2iCamera", FakeZED2iCamera):
         source = ZED2iSource(config)
         source.start()
         frame = source.get_next_frame()
@@ -76,8 +76,8 @@ def test_adapter_maps_zed_frame_to_application_contract() -> None:
 
 
 def test_factory_loads_zed_adapter_lazily() -> None:
-    config = CameraConfig(camera_type="zed2i")
-    with patch("camera.zed2i.ZED2iCamera", FakeZED2iCamera):
+    config = CameraConfig(camera_type="cam_zed2i")
+    with patch("camera.cam_zed2i.ZED2iCamera", FakeZED2iCamera):
         source = create_camera_source(config)
 
     assert isinstance(source, ZED2iSource)

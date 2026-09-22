@@ -154,8 +154,13 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--yolo-model-path is required with --segmentation-mode yolo.")
     if args.show_auto_mask and args.segmentation_mode != "yolo":
         parser.error("--show-auto-mask requires --segmentation-mode yolo.")
-    if args.left_pipe_object_id is not None and args.camera_type != "ros_zed":
-        parser.error("--left-pipe-object-id requires --camera-type ros_zed.")
+    if (
+        args.left_pipe_object_id is not None
+        and args.camera_type != "cam_ros_zed2i"
+    ):
+        parser.error(
+            "--left-pipe-object-id requires --camera-type cam_ros_zed2i."
+        )
     if not args.left_pipe_pose_topic or not args.left_pipe_status_topic:
         parser.error("ROS output topic names must not be empty.")
     return args
@@ -346,7 +351,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         pose_publisher = None
         try:
             camera.start()
-            if args.camera_type == "ros_zed":
+            if args.camera_type == "cam_ros_zed2i":
                 pose_publisher = RosPipePosePublisher(
                     camera.ros_node,
                     pose_topic=args.left_pipe_pose_topic,

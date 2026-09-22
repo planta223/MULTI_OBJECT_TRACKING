@@ -1,4 +1,4 @@
-"""CPU-only tests for the ROS ZED decoder and exact-stamp matcher."""
+"""CPU-only tests for the ROS ZED 2i decoder and exact-stamp matcher."""
 
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -9,7 +9,7 @@ import pytest
 
 from camera.base import FrameData
 from camera.factory import create_camera_source
-from camera.ros_zed import (
+from camera.cam_ros_zed2i import (
     RosZedFrameSynchronizer,
     RosZedSource,
     _load_ros_dependencies,
@@ -175,15 +175,15 @@ def test_different_optical_frame_ids_fail_clearly() -> None:
         )
 
 
-def test_factory_adds_ros_zed_without_loading_ros_at_construction() -> None:
-    source = create_camera_source(CameraConfig(camera_type="ros_zed"))
+def test_factory_adds_cam_ros_zed2i_without_loading_ros_at_construction() -> None:
+    source = create_camera_source(CameraConfig(camera_type="cam_ros_zed2i"))
 
     assert isinstance(source, RosZedSource)
 
 
 def test_missing_ros_runtime_has_actionable_error() -> None:
     with patch(
-        "camera.ros_zed.import_module",
+        "camera.cam_ros_zed2i.import_module",
         side_effect=ModuleNotFoundError("mock missing ROS"),
     ):
         with pytest.raises(ImportError, match="requires ROS2/rclpy"):

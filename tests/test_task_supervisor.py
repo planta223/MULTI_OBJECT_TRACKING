@@ -181,14 +181,14 @@ def test_cli_requires_worker_command_and_preserves_worker_arguments() -> None:
             "/opt/conda/envs/my/bin/python",
             "scripts/test_multi_object.py",
             "--camera-type",
-            "ros_zed",
+            "cam_ros_zed2i",
         ]
     )
     assert args.task_topic == "/tasks"
     assert args.preload_task_id == 3
     assert args.start_task_id == 4
     assert args.worker_cwd == PROJECT_ROOT
-    assert args.worker_command[-2:] == ["--camera-type", "ros_zed"]
+    assert args.worker_command[-2:] == ["--camera-type", "cam_ros_zed2i"]
 
 
 def test_activation_gate_is_optional_for_direct_worker(monkeypatch) -> None:

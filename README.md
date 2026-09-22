@@ -158,17 +158,17 @@ tracking 또는 애플리케이션 시각화 코드를 포함하지 않는다.
 ## 카메라 선택과 smoke test
 
 애플리케이션 기본값은 호스트의 `cam_zed.py` ROS2 토픽을 사용하는
-`ros_zed`다. D405 직접 입력은 `realsense_d405`, ZED SDK 직접 입력은
-`zed2i`를 선택한다. ZED 직접 입력 기본값은 HD720 왼쪽 영상(1280 x 720),
+`cam_ros_zed2i`다. D405 직접 입력은 `cam_d405`, ZED SDK 직접 입력은
+`cam_zed2i`를 선택한다. ZED 직접 입력 기본값은 HD720 왼쪽 영상(1280 x 720),
 30 FPS, NEURAL depth다. `--width`, `--height`는 D405 stream 설정이다.
 
     python3 scripts/test_camera.py \
-      --camera-type realsense_d405 \
+      --camera-type cam_d405 \
       --duration 4 \
       --preview
 
     python3 scripts/test_camera.py \
-      --camera-type zed2i \
+      --camera-type cam_zed2i \
       --zed-resolution HD720 \
       --zed-depth-mode NEURAL \
       --fps 30 \
@@ -176,7 +176,7 @@ tracking 또는 애플리케이션 시각화 코드를 포함하지 않는다.
       --preview
 
     python3 scripts/test_camera.py \
-      --camera-type ros_zed \
+      --camera-type cam_ros_zed2i \
       --ros-color-topic /cam/color/compressed \
       --ros-depth-topic /cam/depth/compressed \
       --ros-camera-info-topic /cam/color/camera_info \
@@ -207,7 +207,7 @@ intrinsic 계약을 받는다.
 ZED SDK를 직접 사용하는 이중 객체 실행 예:
 
     python3 scripts/test_multi_object.py \
-      --camera-type zed2i \
+      --camera-type cam_zed2i \
       --zed-resolution HD720 \
       --zed-depth-mode NEURAL \
       --fps 30 \
@@ -249,7 +249,7 @@ worker는 같은 컨테이너에 있어야 한다. 특히 `/opt/conda/envs/my/bi
       -- \
       /opt/conda/envs/my/bin/python scripts/test_multi_object.py \
         --foundationpose-root /home/rico/Pipe_Align_kkb/FoundationPose \
-        --camera-type ros_zed \
+        --camera-type cam_ros_zed2i \
         --ros-color-topic /cam/color/compressed \
         --ros-depth-topic /cam/depth/compressed \
         --ros-camera-info-topic /cam/color/camera_info \
@@ -319,7 +319,7 @@ symmetry와 Z축 안정화는 기본적으로 꺼져 있다.
 `run_tracking.py`는 검증된 단일 객체 경로를 제공한다. 이중 객체의 실제 정확도와
 성능은 두 물체가 있는 하드웨어 환경에서 검증해야 한다.
 
-Core 및 비 ROS 카메라 실행은 ROS2를 import하지 않는다. `ros_zed` adapter는
+Core 및 비 ROS 카메라 실행은 ROS2를 import하지 않는다. `cam_ros_zed2i` adapter는
 시작할 때만 ROS2를 지연 import하고 기존 publisher interface를 동일한
 `FrameData` 계약으로 변환한다. ROS ZED 실행은 최종 처리된 LEFT Pipe
 `C_T_P`를 `/vision/left_pipe/pose` (`geometry_msgs/msg/PoseStamped`)로,
@@ -335,7 +335,7 @@ QoS, 검증 및 Control PC DDS 확인 방법은 `ros2/README.md`, 호스트/컨�
 
 | 기존 파일 | 현재 파일 |
 |---|---|
-| `pipe_tracking/input/realsense_camera.py` | `../RealSenseD405/src/realsense_d405/camera.py`, `camera/realsense_d405.py` |
+| `pipe_tracking/input/realsense_camera.py` | `../RealSenseD405/src/realsense_d405/camera.py`, `camera/cam_d405.py` |
 | `pipe_tracking/core/frame_data.py` | `camera/base.py` |
 | `pipe_tracking/input/sequence_source.py` | `camera/sequence.py` |
 | `d405_study/src/geometry.py` | `../RealSenseD405/src/realsense_d405/geometry.py` |

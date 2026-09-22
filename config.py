@@ -18,7 +18,7 @@ FOUNDATIONPOSE_ROOT = WORKSPACE_ROOT / "FoundationPose"
 
 # Explicit application defaults. No object is configured until a real CAD is
 # supplied; in particular Pipe1 is not duplicated as a placeholder for Pipe2.
-CAMERA_TYPE = "ros_zed"
+CAMERA_TYPE = "cam_ros_zed2i"
 SEGMENTATION_MODE = "manual"
 ENABLE_VISUALIZATION = True
 ENABLE_POSE_LOGGING = False
@@ -48,7 +48,7 @@ class CameraConfig:
     ros_depth_topic: str = "/cam/depth/compressed"
     ros_camera_info_topic: str = "/cam/color/camera_info"
     ros_frame_timeout_sec: float = 2.0
-    ros_node_name: str = "foundationpose_ros_zed"
+    ros_node_name: str = "foundationpose_cam_ros_zed2i"
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ class AppConfig:
             raise ValueError("zed_resolution must not be empty.")
         if not self.camera.zed_depth_mode:
             raise ValueError("zed_depth_mode must not be empty.")
-        if self.camera.camera_type == "ros_zed":
+        if self.camera.camera_type == "cam_ros_zed2i":
             for field_name in (
                 "ros_color_topic",
                 "ros_depth_topic",

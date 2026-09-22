@@ -301,7 +301,7 @@ def _load_ros_dependencies():
         sensor_messages = import_module("sensor_msgs.msg")
     except (ImportError, ModuleNotFoundError) as error:
         raise ImportError(
-            "ros_zed camera backend requires ROS2/rclpy and sensor_msgs in "
+            "cam_ros_zed2i camera backend requires ROS2/rclpy and sensor_msgs in "
             "the active Python environment."
         ) from error
     return rclpy, executors, qos, sensor_messages
@@ -311,8 +311,10 @@ class RosZedSource(CameraSource):
     """Subscribe to ``cam_zed.py`` without importing either vendor SDK."""
 
     def __init__(self, config: CameraConfig) -> None:
-        if config.camera_type != "ros_zed":
-            raise ValueError(f"Expected ros_zed, got {config.camera_type!r}.")
+        if config.camera_type != "cam_ros_zed2i":
+            raise ValueError(
+                f"Expected cam_ros_zed2i, got {config.camera_type!r}."
+            )
         for field_name in (
             "ros_color_topic",
             "ros_depth_topic",
@@ -366,7 +368,8 @@ class RosZedSource(CameraSource):
         """Expose the owned node for lightweight in-process output adapters.
 
         The node remains owned and destroyed by this camera source.  Reusing it
-        keeps the tracking application as the single ``foundationpose_ros_zed``
+        keeps the tracking application as the single
+        ``foundationpose_cam_ros_zed2i``
         node shown in rqt_graph and avoids a second executor thread.
         """
 
