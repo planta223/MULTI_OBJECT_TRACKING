@@ -1,14 +1,14 @@
-# Tests
+# 테스트
 
-Run commands from the application root:
+모든 명령은 애플리케이션 루트에서 실행한다.
 
 ```bash
 cd /home/rico/Pipe_Align_kkb/MULTI_OBJECT_TRACKING
 ```
 
-## ROS ZED application tests
+## ROS ZED 애플리케이션 테스트
 
-These tests use mocks and do not require a camera or GPU.
+이 테스트들은 mock을 사용하므로 카메라와 GPU가 필요하지 않다.
 
 ```bash
 /usr/bin/python3 -m pytest -q \
@@ -19,17 +19,17 @@ These tests use mocks and do not require a camera or GPU.
   tests/test_yolo_segmenter.py
 ```
 
-## Full CPU test suite
+## 전체 CPU 테스트
 
-Install the sibling camera packages first, or expose their source directories
-temporarily. The latter does not modify the Python environment:
+먼저 sibling 카메라 패키지를 설치하거나 아래와 같이 소스 디렉터리를
+일시적으로 노출한다. 아래 방식은 Python 환경을 변경하지 않는다.
 
 ```bash
 PYTHONPATH="$PWD/../RealSenseD405/src:$PWD/../ZED2iCamera/src" \
   /usr/bin/python3 -m pytest -q
 ```
 
-## Run one file or one test
+## 파일 하나 또는 테스트 하나 실행
 
 ```bash
 /usr/bin/python3 -m pytest -q tests/test_task_supervisor.py
@@ -37,23 +37,23 @@ PYTHONPATH="$PWD/../RealSenseD405/src:$PWD/../ZED2iCamera/src" \
   tests/test_task_supervisor.py::test_worker_preloads_at_three_activates_at_four_and_stops_at_six
 ```
 
-Use `-s` when printed output is needed and `-vv` for detailed test names:
+출력 내용을 보려면 `-s`, 자세한 테스트 이름을 보려면 `-vv`를 사용한다.
 
 ```bash
 /usr/bin/python3 -m pytest -s -vv tests/test_yolo_segmenter.py
 ```
 
-## Test coverage by file
+## 파일별 검증 범위
 
-| File | Scope |
+| 파일 | 검증 범위 |
 |---|---|
-| `test_ros_zed_adapter.py` | ROS image decoding, exact-stamp synchronization, frame validation |
-| `test_ros_pose_publisher.py` | Pose validation and ROS pose/status message generation |
-| `test_multi_object_flow.py` | Dual-object configuration, tracker isolation, masks and overlays |
-| `test_task_supervisor.py` | Task 3 preload, task 4 activation, task 6 stop and timeout handling |
-| `test_yolo_segmenter.py` | YOLO filtering, left/right assignment and mask normalization |
-| `test_realsense_d405_adapter.py` | Optional D405 adapter contract |
-| `test_zed2i_adapter.py` | Optional direct ZED SDK adapter contract |
+| `test_ros_zed_adapter.py` | ROS 이미지 디코딩, 정확한 timestamp 동기화, 프레임 검증 |
+| `test_ros_pose_publisher.py` | Pose 검증과 ROS pose/status 메시지 생성 |
+| `test_multi_object_flow.py` | 이중 객체 설정, tracker 격리, mask 및 overlay |
+| `test_task_supervisor.py` | Task 3 preload, task 4 활성화, task 6 종료 및 timeout 처리 |
+| `test_yolo_segmenter.py` | YOLO 필터링, 좌우 객체 배정, mask 정규화 |
+| `test_realsense_d405_adapter.py` | 선택 사항인 D405 adapter 계약 |
+| `test_zed2i_adapter.py` | 선택 사항인 ZED SDK 직접 연결 adapter 계약 |
 
-These are CPU-level regression tests. They do not measure live ROS transport,
-camera accuracy, FoundationPose GPU inference, or task latency.
+이 테스트들은 CPU 수준의 회귀 테스트다. 실제 ROS 전송, 카메라 정확도,
+FoundationPose GPU 추론 및 task 지연시간은 측정하지 않는다.
