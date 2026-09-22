@@ -28,6 +28,11 @@ from config import (
 from constants import PIPE1_ID, PIPE2_ID, SUPPORTED_SEGMENTATION_MODES
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
 from pose_estimation.pose_result import PoseResult
+from pose_logging.ros_pose_publisher import (
+    LEFT_PIPE_POSE_TOPIC,
+    LEFT_PIPE_STATUS_TOPIC,
+    RosPipePosePublisher,
+)
 from pose_processing.object_pose_processor import ObjectPoseProcessor
 from segmentation import SegmentationCancelled, create_segmenter
 from tracking.tracking_manager import TrackingManager
@@ -78,6 +83,16 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--ros-camera-info-topic", default="/cam/color/camera_info"
     )
     parser.add_argument("--ros-frame-timeout-sec", type=float, default=2.0)
+    parser.add_argument(
+        "--left-pipe-object-id",
+        choices=(PIPE1_ID, PIPE2_ID),
+        help=(
+            "Explicitly map one registered tracker identity to the left-hand "
+            "Pipe ROS output. Required to publish a pose in dual-object mode."
+        ),
+    )
+    parser.add_argument("--left-pipe-pose-topic", default=LEFT_PIPE_POSE_TOPIC)
+    parser.add_argument("--left-pipe-status-topic", default=LEFT_PIPE_STATUS_TOPIC)
     parser.add_argument(
         "--segmentation-mode",
         choices=SUPPORTED_SEGMENTATION_MODES,
@@ -137,6 +152,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--yolo-model-path is required with --segmentation-mode yolo.")
     if args.show_auto_mask and args.segmentation_mode != "yolo":
         parser.error("--show-auto-mask requires --segmentation-mode yolo.")
+    if args.left_pipe_object_id is not None and args.camera_type != "ros_zed":
+        parser.error("--left-pipe-object-id requires --camera-type ros_zed.")
+    if not args.left_pipe_pose_topic or not args.left_pipe_status_topic:
+        parser.error("ROS output topic names must not be empty.")
     return args
 
 
@@ -322,8 +341,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
         print(f"Mesh scale: {args.mesh_scale_to_meter} m/unit")
 
+        pose_publisher = None
         try:
             camera.start()
+            if args.camera_type == "ros_zed":
+                pose_publisher = RosPipePosePublisher(
+                    camera.ros_node,
+                    pose_topic=args.left_pipe_pose_topic,
+                    status_topic=args.left_pipe_status_topic,
+                )
+                if args.left_pipe_object_id is None:
+                    # pipe1/pipe2 are registration identities, not robot-hand
+                    # identities.  Advertise INVALID but never guess a mapping.
+                    pose_publisher.publish_status("INVALID")
+                    print(
+                        "Left Pipe pose publication is disabled: set "
+                        "--left-pipe-object-id after verifying which initial "
+                        "mask belongs to the left-hand grasped Pipe."
+                    )
+                else:
+                    pose_publisher.publish_status("REGISTERING")
             print(f"Camera: {camera.device_name} ({camera.device_serial})")
             print(f"Color stream: {camera.color_stream_info}")
             print(f"Depth stream: {camera.depth_stream_info}")
@@ -375,11 +412,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     "Dual-object registration failed for: "
                     + ", ".join(failed_registration)
                 )
+            registration_processed_poses: Dict[str, np.ndarray] = {}
             for object_id in (PIPE1_ID, PIPE2_ID):
                 registration_result = registration_results[object_id]
-                processors[object_id].process(
+                registration_processed_poses[object_id] = processors[
+                    object_id
+                ].process(
                     registration_result.pose,
                     registration_result.source_frame_id,
+                ).output_pose
+
+            if pose_publisher is not None and args.left_pipe_object_id is not None:
+                # output_pose is final C_T_P after the configured application
+                # post-processing.  The OBB-centered overlay transform is not
+                # exposed to control.
+                pose_publisher.publish_pose(
+                    registration_processed_poses[args.left_pipe_object_id],
+                    frozen_frame,
                 )
 
             cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -399,6 +448,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             result.source_frame_id,
                         ).output_pose
 
+                if pose_publisher is not None and args.left_pipe_object_id is not None:
+                    left_result = results[args.left_pipe_object_id]
+                    if left_result.valid:
+                        pose_publisher.publish_pose(
+                            processed_poses[args.left_pipe_object_id],
+                            frame,
+                        )
+                    else:
+                        # No old pose is resent with this frame's timestamp.
+                        pose_publisher.publish_status("LOST")
+
                 image = _draw_results(
                     frame_rgb=frame.rgb,
                     K=frame.K,
@@ -411,8 +471,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if (cv2.waitKey(1) & 0xFF) in (ord("q"), 27):
                     break
         except SegmentationCancelled as error:
+            if pose_publisher is not None:
+                pose_publisher.publish_status("INVALID")
             print(error)
+        except Exception:
+            if pose_publisher is not None:
+                pose_publisher.publish_status("INVALID")
+            raise
         finally:
+            if pose_publisher is not None:
+                pose_publisher.destroy()
             camera.stop()
             cv2.destroyAllWindows()
 

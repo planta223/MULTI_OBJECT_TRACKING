@@ -260,6 +260,11 @@ unit-task publisher. Arguments after `--` are the unchanged worker command:
         --yolo-device cuda:0 \
         --z-axis-stabilization
 
+This dual-worker command intentionally does not guess a robot-hand identity.
+After verifying which registration mask belongs to the left-hand grasped Pipe,
+append either `--left-pipe-object-id pipe1` or
+`--left-pipe-object-id pipe2` to enable `/vision/left_pipe/pose`.
+
 Keep the host-side ZED publisher running with `zed_cam`. After the supervisor
 reports that it is waiting on the task topic, run the dummy publisher on the
 host in the same ROS domain:
@@ -314,8 +319,14 @@ objects present.
 
 ROS2 is not imported by the core or by non-ROS camera runs. The `ros_zed`
 adapter imports it lazily only when started and normalizes the existing
-publisher interface into the same `FrameData` contract. See
-`../ZED2i_ROS/README.md` for the host/container boundary and commands.
+publisher interface into the same `FrameData` contract. ROS ZED runs now
+publish the final processed LEFT Pipe `C_T_P` as
+`/vision/left_pipe/pose` (`geometry_msgs/msg/PoseStamped`) and tracking state as
+`/vision/left_pipe/tracking_status` (`std_msgs/msg/String`). Dual-object runs
+must explicitly map `pipe1` or `pipe2` with `--left-pipe-object-id`; those IDs
+do not intrinsically mean left/right robot hand. See `ros2/README.md` for pose
+semantics, QoS, validation, and Control-PC DDS checks, and
+`../ZED2i_ROS/README.md` for the host/container camera boundary.
 
 ## Migration map
 

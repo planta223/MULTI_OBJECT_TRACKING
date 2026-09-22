@@ -25,6 +25,12 @@ class FrameData:
     timestamp_domain: Optional[str]
     host_wall_time_s: float
     host_monotonic_time_s: float
+    # Exact ROS metadata is optional because direct SDK and recorded-sequence
+    # sources do not necessarily have a ROS Header.  ROS adapters should carry
+    # these fields unchanged so downstream outputs can preserve acquisition
+    # time and the real optical frame instead of inventing either value.
+    source_timestamp_ns: Optional[int] = None
+    camera_frame_id: Optional[str] = None
 
     def __post_init__(self) -> None:
         if isinstance(self.source_frame_id, bool) or not isinstance(
@@ -51,6 +57,21 @@ class FrameData:
             raise TypeError("timestamp_domain must be a string or None.")
         if not np.isfinite(self.host_wall_time_s) or not np.isfinite(self.host_monotonic_time_s):
             raise ValueError("Host timestamps must be finite.")
+        if self.source_timestamp_ns is not None:
+            if isinstance(self.source_timestamp_ns, bool) or not isinstance(
+                self.source_timestamp_ns, (int, np.integer)
+            ):
+                raise TypeError("source_timestamp_ns must be an integer or None.")
+            if self.source_timestamp_ns < 0:
+                raise ValueError("source_timestamp_ns must be non-negative.")
+            object.__setattr__(
+                self, "source_timestamp_ns", int(self.source_timestamp_ns)
+            )
+        if self.camera_frame_id is not None:
+            if not isinstance(self.camera_frame_id, str):
+                raise TypeError("camera_frame_id must be a string or None.")
+            if not self.camera_frame_id.strip():
+                raise ValueError("camera_frame_id must not be empty.")
         object.__setattr__(self, "rgb", _readonly_copy(self.rgb))
         object.__setattr__(self, "depth_m", _readonly_copy(self.depth_m))
         object.__setattr__(self, "K", _readonly_copy(self.K))

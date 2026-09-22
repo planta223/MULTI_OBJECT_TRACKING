@@ -29,6 +29,11 @@ from constants import PIPE1_ID, SUPPORTED_SEGMENTATION_MODES
 from pose_estimation.foundationpose_runtime import FoundationPoseRuntime
 from pose_processing.object_pose_processor import ObjectPoseProcessor
 from pose_estimation.pose_result import PoseResult
+from pose_logging.ros_pose_publisher import (
+    LEFT_PIPE_POSE_TOPIC,
+    LEFT_PIPE_STATUS_TOPIC,
+    RosPipePosePublisher,
+)
 from tracking.tracking_manager import TrackingManager
 from camera import create_camera_source
 from visualization.visualization import draw_pose_overlay
@@ -70,6 +75,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--ros-camera-info-topic", default="/cam/color/camera_info"
     )
     parser.add_argument("--ros-frame-timeout-sec", type=float, default=2.0)
+    parser.add_argument("--left-pipe-pose-topic", default=LEFT_PIPE_POSE_TOPIC)
+    parser.add_argument("--left-pipe-status-topic", default=LEFT_PIPE_STATUS_TOPIC)
     parser.add_argument(
         "--segmentation-mode",
         choices=SUPPORTED_SEGMENTATION_MODES,
@@ -121,6 +128,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--yolo-class-id must be non-negative.")
     if args.segmentation_mode == "yolo" and args.yolo_model_path is None:
         parser.error("--yolo-model-path is required with --segmentation-mode yolo.")
+    if not args.left_pipe_pose_topic or not args.left_pipe_status_topic:
+        parser.error("ROS output topic names must not be empty.")
     return args
 
 
@@ -263,8 +272,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             f"{np.array2string(tracker.extents, precision=6)} m"
         )
 
+        pose_publisher = None
         try:
             camera.start()
+            if args.camera_type == "ros_zed":
+                # This is the single-object LEFT-Pipe entrypoint, so Pipe1 has
+                # an explicit role here.  Reuse the camera subscriber node;
+                # rclpy publish() enqueues a best-effort depth-one sample and
+                # does not add another executor or wait to the tracking loop.
+                pose_publisher = RosPipePosePublisher(
+                    camera.ros_node,
+                    pose_topic=args.left_pipe_pose_topic,
+                    status_topic=args.left_pipe_status_topic,
+                )
+                pose_publisher.publish_status("REGISTERING")
             print(f"Camera: {camera.device_name} ({camera.device_serial})")
             print(f"Color stream: {camera.color_stream_info}")
             print(f"Depth stream: {camera.depth_stream_info}")
@@ -282,11 +303,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             pose_processor.reset()
             register_result = manager.register_all(frozen_frame, masks)[0]
             print_result(register_result)
+            if not register_result.valid and pose_publisher is not None:
+                pose_publisher.publish_status("INVALID")
             require_valid(register_result)
             processed_pose = pose_processor.process(
                 register_result.pose,
                 register_result.source_frame_id,
             )
+            if pose_publisher is not None:
+                # output_pose is the application-level final C_T_P.  Do not
+                # publish the centered visualization transform.
+                pose_publisher.publish_pose(
+                    processed_pose.output_pose,
+                    frozen_frame,
+                )
             visualization_label = (
                 "Pipe1 Z-axis stable"
                 if processed_pose.z_axis_stabilized
@@ -309,11 +339,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
                 track_result = manager.track_all(frame)[0]
                 print_result(track_result)
+                if not track_result.valid and pose_publisher is not None:
+                    pose_publisher.publish_status("LOST")
                 require_valid(track_result)
                 processed_pose = pose_processor.process(
                     track_result.pose,
                     track_result.source_frame_id,
                 )
+                if pose_publisher is not None:
+                    pose_publisher.publish_pose(
+                        processed_pose.output_pose,
+                        frame,
+                    )
                 if args.z_axis_stabilization:
                     if track_result.source_frame_id % 30 == 0:
                         _print_stabilization_debug(
@@ -342,8 +379,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if (cv2.waitKey(1) & 0xFF) in (ord("q"), 27):
                     break
         except SegmentationCancelled as error:
+            if pose_publisher is not None:
+                pose_publisher.publish_status("INVALID")
             print(error)
+        except Exception:
+            if pose_publisher is not None:
+                pose_publisher.publish_status("INVALID")
+            raise
         finally:
+            if pose_publisher is not None:
+                pose_publisher.destroy()
             camera.stop()
             cv2.destroyAllWindows()
 

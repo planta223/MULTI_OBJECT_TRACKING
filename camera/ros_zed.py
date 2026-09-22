@@ -45,6 +45,18 @@ def _stamp_ns(message: Any) -> int:
     return sec * 1_000_000_000 + nanosec
 
 
+def _camera_frame_id(message: Any) -> str:
+    """Return and validate the optical frame carried by a ROS Header."""
+
+    try:
+        frame_id = message.header.frame_id
+    except AttributeError as error:
+        raise ValueError("ROS message is missing header.frame_id.") from error
+    if not isinstance(frame_id, str) or not frame_id.strip():
+        raise ValueError("ROS message header.frame_id must be a non-empty string.")
+    return frame_id
+
+
 def decode_color_message(message: Any) -> np.ndarray:
     """Decode ``CompressedImage`` JPEG bytes into contiguous RGB uint8."""
 
@@ -226,6 +238,17 @@ class RosZedFrameSynchronizer:
         depth_message: Any,
         info_message: Any,
     ) -> FrameData:
+        frame_ids = {
+            _camera_frame_id(color_message),
+            _camera_frame_id(depth_message),
+            _camera_frame_id(info_message),
+        }
+        if len(frame_ids) != 1:
+            raise ValueError(
+                "Synchronized ROS ZED messages use different frame_id values: "
+                f"{sorted(frame_ids)}."
+            )
+        camera_frame_id = frame_ids.pop()
         rgb = decode_color_message(color_message)
         original_depth_m = decode_depth_message(depth_message)
         K = camera_matrix_from_message(info_message)
@@ -250,6 +273,8 @@ class RosZedFrameSynchronizer:
             timestamp_domain="ros_publish_clock",
             host_wall_time_s=host_wall_time_s,
             host_monotonic_time_s=host_monotonic_time_s,
+            source_timestamp_ns=stamp_ns,
+            camera_frame_id=camera_frame_id,
         )
 
     def wait_for_newer(self, frame_id: int, timeout_s: float) -> Optional[FrameData]:
@@ -335,6 +360,19 @@ class RosZedSource(CameraSource):
     def depth_stream_info(self):
         with self._stream_lock:
             return self._depth_stream_info
+
+    @property
+    def ros_node(self):
+        """Expose the owned node for lightweight in-process output adapters.
+
+        The node remains owned and destroyed by this camera source.  Reusing it
+        keeps the tracking application as the single ``foundationpose_ros_zed``
+        node shown in rqt_graph and avoids a second executor thread.
+        """
+
+        if self._node is None:
+            raise RuntimeError("RosZedSource.start() must be called first.")
+        return self._node
 
     def start(self) -> None:
         if self.is_running:

@@ -20,24 +20,37 @@ from camera.ros_zed import (
 from config import CameraConfig
 
 
-def _header(stamp_ns: int):
+def _header(stamp_ns: int, frame_id: str = "camera_left_optical_frame"):
     return SimpleNamespace(
         stamp=SimpleNamespace(
             sec=stamp_ns // 1_000_000_000,
             nanosec=stamp_ns % 1_000_000_000,
-        )
+        ),
+        frame_id=frame_id,
     )
 
 
-def _compressed(array: np.ndarray, extension: str, stamp_ns: int):
+def _compressed(
+    array: np.ndarray,
+    extension: str,
+    stamp_ns: int,
+    frame_id: str = "camera_left_optical_frame",
+):
     success, encoded = cv2.imencode(extension, array)
     assert success
-    return SimpleNamespace(header=_header(stamp_ns), data=encoded.tobytes())
-
-
-def _info(stamp_ns: int, width: int = 4, height: int = 2):
     return SimpleNamespace(
-        header=_header(stamp_ns),
+        header=_header(stamp_ns, frame_id), data=encoded.tobytes()
+    )
+
+
+def _info(
+    stamp_ns: int,
+    width: int = 4,
+    height: int = 2,
+    frame_id: str = "camera_left_optical_frame",
+):
+    return SimpleNamespace(
+        header=_header(stamp_ns, frame_id),
         width=width,
         height=height,
         k=[700.0, 0.0, width / 2, 0.0, 710.0, height / 2, 0.0, 0.0, 1.0],
@@ -92,6 +105,8 @@ def test_equal_stamps_make_one_frame_and_upscale_aligned_depth_nearest() -> None
         np.array([[0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]], dtype=np.float32),
     )
     assert frame.K.shape == (3, 3)
+    assert frame.source_timestamp_ns == stamp
+    assert frame.camera_frame_id == "camera_left_optical_frame"
     assert synchronizer.add_camera_info(_info(stamp)) is None
 
 
@@ -144,6 +159,20 @@ def test_camera_info_resolution_mismatch_fails_clearly() -> None:
     synchronizer.add_depth(_compressed(depth_mm, ".png", stamp))
     with pytest.raises(ValueError, match="CameraInfo resolution"):
         synchronizer.add_camera_info(_info(stamp, width=8, height=4))
+
+
+def test_different_optical_frame_ids_fail_clearly() -> None:
+    synchronizer = RosZedFrameSynchronizer()
+    stamp = 31
+    bgr = np.zeros((2, 4, 3), dtype=np.uint8)
+    depth_mm = np.zeros((1, 2), dtype=np.uint16)
+
+    synchronizer.add_color(_compressed(bgr, ".jpg", stamp))
+    synchronizer.add_depth(_compressed(depth_mm, ".png", stamp))
+    with pytest.raises(ValueError, match="different frame_id"):
+        synchronizer.add_camera_info(
+            _info(stamp, frame_id="unexpected_camera_frame")
+        )
 
 
 def test_factory_adds_ros_zed_without_loading_ros_at_construction() -> None:
