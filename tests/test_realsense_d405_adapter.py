@@ -47,7 +47,7 @@ class FakeD405Camera:
 
 def test_adapter_maps_sensor_frame_to_application_contract() -> None:
     with patch("camera.realsense_d405.D405Camera", FakeD405Camera):
-        source = RealSenseD405Source(CameraConfig())
+        source = RealSenseD405Source(CameraConfig(camera_type="realsense_d405"))
         source.start()
         frame = source.get_next_frame()
 

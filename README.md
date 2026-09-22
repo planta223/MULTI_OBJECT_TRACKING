@@ -156,8 +156,9 @@ segmentation, pose-estimation, tracking, or application visualization code.
 
 ## Camera selection and smoke tests
 
-The default remains `realsense_d405`. Select `zed2i` for direct SDK input or
-`ros_zed` for the existing host-side `cam_zed.py` ROS2 topics. Direct ZED
+The application default is `ros_zed`, using the existing host-side
+`cam_zed.py` ROS2 topics. Select `realsense_d405` for direct D405 input or
+`zed2i` for direct ZED SDK input. Direct ZED
 defaults to its native
 HD720 left image (1280 x 720), 30 FPS, and NEURAL depth; `--width` and
 `--height` remain D405 stream settings.
@@ -225,14 +226,19 @@ and performs its own RGB-to-BGR conversion; camera adapters always output RGB.
 `scripts/run_task_supervisor.py` is a lightweight ROS2 process that does not
 import YOLO, FoundationPose, or CUDA. It subscribes to
 `/recog/unit_task/result` (`std_msgs/msg/Int8`), starts the dual-object worker
-once when task 4 begins, keeps it running through task 5, and terminates the
-worker process group when task 6 begins. Terminating the worker releases its
-CUDA context and GPU memory while the ZED publisher and supervisor remain
-alive. If task messages disappear while the worker is active, the default
-two-second watchdog also stops it.
+once when task 3 begins, and lets it preload YOLO, FoundationPose, CUDA, CAD,
+and the ROS camera subscriber. The worker then waits immediately before taking
+the frozen frame and running YOLO/registration. Task 4 releases that one-shot
+gate, task 5 keeps tracking alive, and task 6 terminates the worker process
+group. Terminating the worker releases its CUDA context and GPU memory while
+the ZED publisher and supervisor remain alive. If task messages disappear
+while the worker is active, the default two-second watchdog also stops it.
 
 Start this supervisor inside the FoundationPose container before starting the
-unit-task publisher. Arguments after `--` are the unchanged worker command:
+unit-task publisher. The supervisor and worker must run in the same container
+because the task-4 activation gate is an inherited file descriptor. In
+particular, `/opt/conda/envs/my/bin/python` exists inside the container, not on
+the host. Arguments after `--` are the unchanged worker command:
 
     source /opt/ros/foxy/setup.bash
     export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
@@ -241,6 +247,7 @@ unit-task publisher. Arguments after `--` are the unchanged worker command:
 
     /usr/bin/python3 scripts/run_task_supervisor.py \
       --task-topic /recog/unit_task/result \
+      --preload-task-id 3 \
       --start-task-id 4 \
       --stop-task-id 6 \
       -- \
@@ -276,10 +283,14 @@ host in the same ROS domain:
     /usr/bin/python3 dummy_unit_task_publisher.py
 
 Do not add `--show-auto-mask` to an unattended worker command because its
-blocking confirmation window can consume the task-4 interval. Repeated task-4
-or task-6 messages do not repeatedly start or stop the worker. A supervisor
-that first connects during task 5 waits for the next task-4 transition rather
-than starting tracking without the intended registration trigger.
+blocking confirmation window can consume the task-4 interval. Repeated task-3,
+task-4, or task-6 messages do not repeatedly preload, activate, or stop the
+worker. If task 3 was missed but task 4 is received, the supervisor falls back
+to a cold start and immediately queues activation. A supervisor that first
+connects during task 5 waits for the next preload/activation cycle rather than
+starting tracking without the intended registration trigger. The task topic
+must continue publishing more frequently than the configured watchdog timeout
+during both preload and tracking.
 
 ## Adding another camera
 

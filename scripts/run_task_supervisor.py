@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the FoundationPose worker at unit task 4 and stop it at task 6."""
+"""Preload FoundationPose at unit task 3, activate it at 4, and stop at 6."""
 
 import argparse
 import os
@@ -7,11 +7,16 @@ from pathlib import Path
 import shlex
 import signal
 import subprocess
+import sys
 import time
 from typing import Callable, Optional, Sequence
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from task_activation import ACTIVATION_FD_ENV
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -20,6 +25,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--task-topic",
         default="/recog/unit_task/result",
         help="std_msgs/msg/Int8 unit-task topic.",
+    )
+    parser.add_argument(
+        "--preload-task-id",
+        type=int,
+        default=3,
+        help="Start the worker and preload models at this task.",
     )
     parser.add_argument("--start-task-id", type=int, default=4)
     parser.add_argument("--stop-task-id", type=int, default=6)
@@ -60,12 +71,15 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("provide the worker command after '--'")
     if not args.task_topic:
         parser.error("--task-topic must not be empty")
-    for name in ("start_task_id", "stop_task_id"):
+    for name in ("preload_task_id", "start_task_id", "stop_task_id"):
         value = getattr(args, name)
         if not -128 <= value <= 127:
             parser.error(f"--{name.replace('_', '-')} must fit std_msgs/msg/Int8")
-    if args.start_task_id >= args.stop_task_id:
-        parser.error("--start-task-id must be less than --stop-task-id")
+    if not args.preload_task_id < args.start_task_id < args.stop_task_id:
+        parser.error(
+            "task IDs must satisfy --preload-task-id < --start-task-id "
+            "< --stop-task-id"
+        )
     for name in ("task_timeout_sec", "stop_timeout_sec", "term_timeout_sec"):
         if getattr(args, name) <= 0:
             parser.error(f"--{name.replace('_', '-')} must be positive")
@@ -95,6 +109,7 @@ class WorkerProcessController:
         self._popen_factory = popen_factory
         self._signal_process_group = signal_process_group
         self._process = None
+        self._activation_write_fd: Optional[int] = None
 
     @property
     def pid(self) -> Optional[int]:
@@ -111,18 +126,57 @@ class WorkerProcessController:
         return_code = self._process.poll()
         if return_code is None:
             return None
+        self._close_activation_writer()
         self._process = None
         return int(return_code)
+
+    def _close_activation_writer(self) -> None:
+        if self._activation_write_fd is None:
+            return
+        try:
+            os.close(self._activation_write_fd)
+        except OSError:
+            pass
+        self._activation_write_fd = None
 
     def start(self) -> bool:
         if self.is_running:
             return False
-        self._process = self._popen_factory(
-            self.command,
-            cwd=str(self.cwd),
-            env=os.environ.copy(),
-            start_new_session=True,
-        )
+        activation_read_fd, activation_write_fd = os.pipe()
+        environment = os.environ.copy()
+        environment[ACTIVATION_FD_ENV] = str(activation_read_fd)
+        try:
+            self._process = self._popen_factory(
+                self.command,
+                cwd=str(self.cwd),
+                env=environment,
+                start_new_session=True,
+                pass_fds=(activation_read_fd,),
+            )
+        except BaseException:
+            os.close(activation_write_fd)
+            raise
+        finally:
+            os.close(activation_read_fd)
+        self._activation_write_fd = activation_write_fd
+        return True
+
+    def activate(self) -> bool:
+        """Release a running worker from its one-shot preload gate."""
+
+        if not self.is_running or self._activation_write_fd is None:
+            return False
+        write_fd = self._activation_write_fd
+        self._activation_write_fd = None
+        try:
+            os.write(write_fd, b"1")
+        except (BrokenPipeError, OSError):
+            return False
+        finally:
+            try:
+                os.close(write_fd)
+            except OSError:
+                pass
         return True
 
     def _send_signal(self, signum: int) -> None:
@@ -148,6 +202,7 @@ class WorkerProcessController:
                 except subprocess.TimeoutExpired:
                     self._send_signal(signal.SIGKILL)
                     process.wait()
+        self._close_activation_writer()
         self._process = None
         return True
 
@@ -158,6 +213,7 @@ class TaskTriggeredWorker:
     def __init__(
         self,
         controller: WorkerProcessController,
+        preload_task_id: int,
         start_task_id: int,
         stop_task_id: int,
         task_timeout_sec: float,
@@ -166,6 +222,7 @@ class TaskTriggeredWorker:
         log: Callable[[str], None] = print,
     ) -> None:
         self.controller = controller
+        self.preload_task_id = int(preload_task_id)
         self.start_task_id = int(start_task_id)
         self.stop_task_id = int(stop_task_id)
         self.task_timeout_sec = float(task_timeout_sec)
@@ -173,6 +230,21 @@ class TaskTriggeredWorker:
         self._log = log
         self._last_task_id: Optional[int] = None
         self._last_task_time: Optional[float] = None
+
+    def _start_worker(self, reason: str) -> bool:
+        try:
+            started = self.controller.start()
+        except Exception as error:
+            self._log(
+                f"Worker failed to start during {reason}: "
+                f"{type(error).__name__}: {error}"
+            )
+            return False
+        if started:
+            self._log(
+                f"Worker started for {reason}; pid={self.controller.pid}"
+            )
+        return started
 
     def on_task(self, task_id: int) -> None:
         task_id = int(task_id)
@@ -182,9 +254,24 @@ class TaskTriggeredWorker:
         if task_id != previous:
             self._log(f"Task transition: {previous} -> {task_id}")
 
+        if task_id == self.preload_task_id and previous != self.preload_task_id:
+            self._start_worker(f"preload task {task_id}")
+            return
+
         if task_id == self.start_task_id and previous != self.start_task_id:
-            if self.controller.start():
-                self._log(f"Worker started at task {task_id}; pid={self.controller.pid}")
+            if not self.controller.is_running:
+                self._log(
+                    f"Preload task {self.preload_task_id} was missed; "
+                    f"starting worker cold at task {task_id}"
+                )
+                if not self._start_worker(f"cold activation task {task_id}"):
+                    return
+            if self.controller.activate():
+                self._log(
+                    f"Worker activated at task {task_id}; pid={self.controller.pid}"
+                )
+            else:
+                self._log(f"Worker activation failed at task {task_id}")
             return
 
         if task_id >= self.stop_task_id and self.controller.is_running:
@@ -237,6 +324,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     supervisor = TaskTriggeredWorker(
         controller=controller,
+        preload_task_id=args.preload_task_id,
         start_task_id=args.start_task_id,
         stop_task_id=args.stop_task_id,
         task_timeout_sec=args.task_timeout_sec,
@@ -251,7 +339,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     node.create_timer(0.2, supervisor.tick)
     logger.info(f"Task topic: {args.task_topic} (std_msgs/msg/Int8)")
     logger.info(
-        f"Worker policy: start={args.start_task_id}, stop={args.stop_task_id}, "
+        f"Worker policy: preload={args.preload_task_id}, "
+        f"activate={args.start_task_id}, stop={args.stop_task_id}, "
         f"message_timeout={args.task_timeout_sec:g}s"
     )
     logger.info(f"Worker command: {shlex.join(args.worker_command)}")

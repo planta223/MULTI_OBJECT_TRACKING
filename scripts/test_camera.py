@@ -13,12 +13,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from camera import create_camera_source
-from config import CameraConfig
+from config import CAMERA_TYPE, CameraConfig
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--camera-type", default="realsense_d405")
+    parser.add_argument("--camera-type", default=CAMERA_TYPE)
     parser.add_argument("--width", type=int, default=848)
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fps", type=int, default=30)

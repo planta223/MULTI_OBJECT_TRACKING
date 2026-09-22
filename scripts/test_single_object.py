@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from config import (
     AppConfig,
+    CAMERA_TYPE,
     CameraConfig,
     FeatureFlags,
     FoundationPoseConfig,
@@ -38,6 +39,7 @@ from tracking.tracking_manager import TrackingManager
 from camera import create_camera_source
 from visualization.visualization import draw_pose_overlay
 from segmentation import SegmentationCancelled, create_segmenter
+from task_activation import wait_for_supervisor_activation
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -66,7 +68,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=480)
     parser.add_argument("--fps", type=int, default=30)
     parser.add_argument("--serial")
-    parser.add_argument("--camera-type", default="realsense_d405")
+    parser.add_argument("--camera-type", default=CAMERA_TYPE)
     parser.add_argument("--zed-resolution", default="HD720")
     parser.add_argument("--zed-depth-mode", default="NEURAL")
     parser.add_argument("--ros-color-topic", default="/cam/color/compressed")
@@ -285,7 +287,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     pose_topic=args.left_pipe_pose_topic,
                     status_topic=args.left_pipe_status_topic,
                 )
-                pose_publisher.publish_status("REGISTERING")
             print(f"Camera: {camera.device_name} ({camera.device_serial})")
             print(f"Color stream: {camera.color_stream_info}")
             print(f"Depth stream: {camera.depth_stream_info}")
@@ -293,6 +294,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             if args.warmup_seconds:
                 time.sleep(args.warmup_seconds)
+            if wait_for_supervisor_activation():
+                print("Task activation received; starting YOLO and registration.")
+            if pose_publisher is not None:
+                pose_publisher.publish_status("REGISTERING")
             camera.raise_if_failed()
             frozen_frame = camera.get_next_frame()
             print(f"Frozen frame for mask: {frozen_frame.source_frame_id}")

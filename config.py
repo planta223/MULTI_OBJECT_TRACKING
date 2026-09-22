@@ -18,7 +18,7 @@ FOUNDATIONPOSE_ROOT = WORKSPACE_ROOT / "FoundationPose"
 
 # Explicit application defaults. No object is configured until a real CAD is
 # supplied; in particular Pipe1 is not duplicated as a placeholder for Pipe2.
-CAMERA_TYPE = "realsense_d405"
+CAMERA_TYPE = "ros_zed"
 SEGMENTATION_MODE = "manual"
 ENABLE_VISUALIZATION = True
 ENABLE_POSE_LOGGING = False

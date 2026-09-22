@@ -101,6 +101,7 @@ def test_dual_cli_defaults_to_both_real_models() -> None:
     assert args.pipe1_model_path == PROJECT_ROOT / "models" / "pipe1.obj"
     assert args.pipe2_model_path == PROJECT_ROOT / "models" / "pipe2.obj"
     assert args.mesh_scale_to_meter == 0.001
+    assert args.camera_type == "ros_zed"
     assert args.task_symmetry_output is False
     assert args.z_axis_stabilization is False
     assert args.show_auto_mask is False
