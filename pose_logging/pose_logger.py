@@ -1,5 +1,5 @@
-"""Pose logging extension point.
+"""Pose logging 확장 지점.
 
-Persistent pose logging is intentionally not implemented during migration.
-Callers currently use the verified console output in the regression script.
+마이그레이션 중에는 영구 pose logging을 의도적으로 구현하지 않는다.
+현재 호출자는 회귀 script에서 검증된 console 출력을 사용한다.
 """

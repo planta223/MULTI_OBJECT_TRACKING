@@ -1,4 +1,4 @@
-"""Inspect one aligned D405 frame, intrinsics, and stream metadata."""
+"""정렬된 D405 frame 하나와 intrinsics 및 stream metadata를 확인한다."""
 
 import argparse
 from pathlib import Path

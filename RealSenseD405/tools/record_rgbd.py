@@ -1,4 +1,4 @@
-"""Record an aligned D405 RGB-D sequence without pose-estimation code."""
+"""pose 추정 코드 없이 정렬된 D405 RGB-D sequence를 녹화한다."""
 
 import argparse
 import csv

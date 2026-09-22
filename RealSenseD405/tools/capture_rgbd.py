@@ -1,4 +1,4 @@
-"""Preview aligned D405 RGB-D and save snapshots with S."""
+"""정렬된 D405 RGB-D를 미리 보고 S 키로 snapshot을 저장한다."""
 
 import argparse
 from pathlib import Path

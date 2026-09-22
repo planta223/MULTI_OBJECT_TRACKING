@@ -1,4 +1,4 @@
-"""Lazy camera-adapter discovery for application entrypoints."""
+"""애플리케이션 진입점에서 카메라 adapter를 지연 탐색한다."""
 
 from importlib import import_module
 import re
@@ -10,11 +10,11 @@ _CAMERA_TYPE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def create_camera_source(config) -> CameraSource:
-    """Create the adapter named by ``config.camera_type``.
+    """``config.camera_type``으로 지정된 adapter를 생성한다.
 
-    A camera adapter module must live at ``camera/<camera_type>.py`` and expose
-    a ``create_source(config)`` function. Importing this factory does not load
-    any vendor SDK or concrete camera package.
+    카메라 adapter 모듈은 ``camera/<camera_type>.py``에 위치하고
+    ``create_source(config)`` 함수를 제공해야 한다. 이 factory를 import하는
+    것만으로는 제조사 SDK나 구체적인 카메라 패키지를 불러오지 않는다.
     """
 
     camera_type = getattr(config, "camera_type", None)

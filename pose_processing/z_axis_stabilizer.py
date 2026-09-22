@@ -1,9 +1,8 @@
-"""Temporal pose stabilization for objects with axial Z symmetry.
+"""축 방향 Z symmetry를 가진 객체의 시간 기반 pose 안정화.
 
-Only the direction of the raw object's Z axis is retained.  Rotation about
-that axis is discarded, while a per-instance stable X/Y basis is propagated
-between frames.  Translation and the remaining homogeneous-pose entries are
-copied unchanged from the input pose.
+원본 객체 Z축의 방향만 유지한다. 해당 축을 중심으로 한 회전은 버리고,
+인스턴스별로 안정적인 X/Y basis를 frame 사이에 전파한다. translation과 나머지
+homogeneous pose 항목은 입력 pose에서 변경 없이 복사한다.
 """
 
 from dataclasses import dataclass
@@ -19,7 +18,7 @@ _CAMERA_BASIS = np.eye(3, dtype=np.float64)
 
 @dataclass(frozen=True)
 class RotationDiagnostics:
-    """Numerical quality metrics for a candidate 3x3 rotation matrix."""
+    """후보 3x3 회전 행렬의 수치 품질 지표."""
 
     determinant: float
     orthogonality_error: float
@@ -28,7 +27,7 @@ class RotationDiagnostics:
 
 
 def rotation_diagnostics(rotation: np.ndarray) -> RotationDiagnostics:
-    """Return determinant and orthonormality metrics for a 3x3 matrix."""
+    """3x3 행렬의 determinant와 orthonormality 지표를 반환한다."""
 
     matrix = np.asarray(rotation, dtype=np.float64)
     if matrix.shape != (3, 3):
@@ -47,7 +46,7 @@ def rotation_diagnostics(rotation: np.ndarray) -> RotationDiagnostics:
 
 
 def _normalize(vector: np.ndarray, *, name: str) -> np.ndarray:
-    """Normalize a finite 3-vector without overflowing on large values."""
+    """큰 값에서 overflow 없이 유한한 3-vector를 정규화한다."""
 
     values = np.asarray(vector, dtype=np.float64)
     if values.shape != (3,):
@@ -63,23 +62,23 @@ def _normalize(vector: np.ndarray, *, name: str) -> np.ndarray:
 
 
 def _project_reference(reference: np.ndarray, z_axis: np.ndarray) -> np.ndarray:
-    """Project a reference direction onto the plane perpendicular to Z."""
+    """기준 방향을 Z에 수직인 평면으로 투영한다."""
 
     return reference - np.dot(reference, z_axis) * z_axis
 
 
 def _most_stable_camera_axis(z_axis: np.ndarray) -> np.ndarray:
-    """Select the camera basis axis least aligned with the current Z axis."""
+    """현재 Z축과 가장 덜 나란한 카메라 basis 축을 선택한다."""
 
     alignment = np.abs(_CAMERA_BASIS @ z_axis)
     return _CAMERA_BASIS[int(np.argmin(alignment))].copy()
 
 
 class ZAxisPoseStabilizer:
-    """Remove raw axial roll while preserving temporal Z-axis continuity.
+    """시간에 따른 Z축 연속성을 유지하면서 원본 축 방향 roll을 제거한다.
 
-    State belongs exclusively to this instance, so callers should create one
-    stabilizer per independently tracked object.
+    상태는 이 인스턴스에만 속하므로 독립적으로 추적하는 객체마다 stabilizer를
+    하나씩 생성해야 한다.
     """
 
     def __init__(self) -> None:
@@ -88,13 +87,13 @@ class ZAxisPoseStabilizer:
 
     @property
     def initialized(self) -> bool:
-        """Whether at least one pose has been stabilized since the last reset."""
+        """마지막 reset 이후 pose를 하나 이상 안정화했는지 나타낸다."""
 
         return self._previous_x is not None and self._previous_z is not None
 
     @property
     def previous_x(self) -> Optional[np.ndarray]:
-        """Return a copy of the previous stable X axis, if initialized."""
+        """초기화되었다면 이전의 안정적인 X축 복사본을 반환한다."""
 
         if self._previous_x is None:
             return None
@@ -102,14 +101,14 @@ class ZAxisPoseStabilizer:
 
     @property
     def previous_z(self) -> Optional[np.ndarray]:
-        """Return a copy of the previous stable Z axis, if initialized."""
+        """초기화되었다면 이전의 안정적인 Z축 복사본을 반환한다."""
 
         if self._previous_z is None:
             return None
         return self._previous_z.copy()
 
     def reset(self) -> None:
-        """Forget the stable basis, for example before a new registration."""
+        """새 registration 전과 같이 필요할 때 안정적인 basis 이력을 지운다."""
 
         self._previous_x = None
         self._previous_z = None
@@ -127,7 +126,7 @@ class ZAxisPoseStabilizer:
         return np.array(pose, copy=True, order="C")
 
     def stabilize(self, raw_pose: np.ndarray) -> np.ndarray:
-        """Return a pose whose X/Y basis ignores raw rotation about object Z."""
+        """객체 Z축 중심의 원본 회전을 무시한 X/Y basis pose를 반환한다."""
 
         stable_pose = self._validated_pose(raw_pose)
         z_axis = _normalize(stable_pose[:3, 2], name="raw rotation Z axis")
@@ -148,8 +147,8 @@ class ZAxisPoseStabilizer:
 
         x_axis = _normalize(x_projected, name="projected stable X axis")
         y_axis = _normalize(np.cross(z_axis, x_axis), name="stable Y axis")
-        # Recompute X to remove the last floating-point component along Z and
-        # guarantee a right-handed basis with columns (X, Y, Z).
+        # Z 방향에 남은 마지막 부동소수점 성분을 제거하고 열이 (X, Y, Z)인
+        # 오른손 basis를 보장하도록 X를 다시 계산한다.
         x_axis = _normalize(np.cross(y_axis, z_axis), name="stable X axis")
 
         stable_pose[:3, :3] = np.column_stack((x_axis, y_axis, z_axis))

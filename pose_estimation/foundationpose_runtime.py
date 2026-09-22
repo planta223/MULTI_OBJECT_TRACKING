@@ -1,8 +1,8 @@
-"""Shared heavyweight FoundationPose inference resources.
+"""공유하는 고비용 FoundationPose 추론 리소스.
 
-This is the only application module that imports NVIDIA FoundationPose
-modules directly. Import and initialization are deliberately lazy so the
-package's data contracts remain importable outside the GPU container.
+NVIDIA FoundationPose 모듈을 직접 가져오는 유일한 애플리케이션 모듈이다.
+GPU container 밖에서도 패키지의 데이터 계약을 불러올 수 있도록 import와
+초기화를 의도적으로 지연한다.
 """
 
 from contextlib import contextmanager
@@ -17,11 +17,11 @@ PathLike = Union[str, Path]
 
 
 class FoundationPoseRuntime:
-    """Own one scorer, one refiner, and one CUDA raster context.
+    """scorer, refiner, CUDA raster context를 각각 하나씩 소유한다.
 
-    Multiple ObjectTracker instances may create independent FoundationPose
-    estimators through this runtime. Calls using the shared inference resources
-    are serialized by ``inference_guard``.
+    여러 ObjectTracker 인스턴스가 이 runtime을 통해 독립적인 FoundationPose
+    estimator를 생성할 수 있다. 공유 추론 리소스를 사용하는 호출은
+    ``inference_guard``가 순차 실행한다.
     """
 
     def __init__(self, foundationpose_root: Optional[PathLike] = None) -> None:
@@ -43,11 +43,11 @@ class FoundationPoseRuntime:
         if environment_root:
             return Path(environment_root).expanduser().resolve()
 
-        # The external checkout lives inside the application root by default.
+        # 외부 checkout은 기본적으로 애플리케이션 루트 안에 위치한다.
         return (Path(__file__).resolve().parents[1] / "FoundationPose").resolve()
 
     def initialize(self) -> None:
-        """Import FoundationPose and allocate shared resources exactly once."""
+        """FoundationPose를 가져오고 공유 리소스를 정확히 한 번 할당한다."""
 
         if self._initialized:
             return
@@ -75,7 +75,7 @@ class FoundationPoseRuntime:
                 )
 
         try:
-            # Keep all direct NVIDIA FoundationPose imports in this module.
+            # NVIDIA FoundationPose 직접 import는 모두 이 모듈 안에 둔다.
             from estimater import FoundationPose
             from learning.training.predict_pose_refine import PoseRefinePredictor
             from learning.training.predict_score import ScorePredictor
@@ -117,7 +117,7 @@ class FoundationPoseRuntime:
         debug: int,
         debug_dir: PathLike,
     ) -> Any:
-        """Create an estimator with independent mesh and tracking state."""
+        """독립적인 mesh와 tracking 상태를 가진 estimator를 생성한다."""
 
         if self._foundationpose_class is None:
             raise RuntimeError("FoundationPoseRuntime is not initialized.")
@@ -137,7 +137,7 @@ class FoundationPoseRuntime:
 
     @contextmanager
     def inference_guard(self) -> Iterator[None]:
-        """Serialize calls that use the shared predictor/context objects."""
+        """공유 predictor/context 객체를 사용하는 호출을 순차 실행한다."""
 
         with self._inference_lock:
             yield

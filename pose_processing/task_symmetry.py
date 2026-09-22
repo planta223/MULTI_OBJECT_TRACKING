@@ -1,9 +1,9 @@
-"""Assembly-task pose equivalence for the D-cut pipe.
+"""D-cut pipe의 조립 task pose 동치 관계.
 
-These transforms are deliberately *not* geometric mesh symmetries.  The
-D-cut remains part of the CAD seen by FoundationPose.  They only express
-orientations that are interchangeable for the downstream flange-assembly
-task, and must never be passed to FoundationPose as ``symmetry_tfs``.
+이 transform들은 의도적으로 기하학적 mesh symmetry가 *아니다*. D-cut은
+FoundationPose가 보는 CAD의 일부로 유지된다. downstream flange 조립 task에서
+서로 바꿔 쓸 수 있는 방향만 표현하며, FoundationPose에 ``symmetry_tfs``로
+전달해서는 안 된다.
 """
 
 from dataclasses import dataclass
@@ -13,9 +13,8 @@ from typing import Optional, Tuple
 import numpy as np
 
 
-# Temporary CAD-frame assumptions are centralized here so they can be updated
-# after a definitive CAD coordinate-frame check without changing the
-# canonicalization algorithm.
+# 임시 CAD frame 가정을 이곳에 모아 둔다. 이후 CAD 좌표계를 확정해도
+# canonicalization 알고리즘을 변경하지 않고 갱신할 수 있다.
 PIPE_LENGTH_AXIS = "z"
 FLANGE_PHASE_DEGREES = (0.0, 120.0, 240.0)
 FRONT_BACK_FLIP_AXIS = "x"
@@ -23,7 +22,7 @@ FRONT_BACK_DEGREES = (0.0, 180.0)
 
 
 def _axis_rotation(axis: str, angle_degrees: float) -> np.ndarray:
-    """Create a 4x4 right-handed rotation about one CAD axis."""
+    """CAD 축 하나를 중심으로 하는 4x4 오른손 회전을 생성한다."""
 
     angle = math.radians(angle_degrees)
     cosine = math.cos(angle)
@@ -54,11 +53,11 @@ def _axis_rotation(axis: str, angle_degrees: float) -> np.ndarray:
 
 
 def build_pipe_task_symmetry_transforms() -> Tuple[np.ndarray, ...]:
-    """Return the six task-equivalent CAD-frame rotations.
+    """task 관점에서 동치인 CAD frame 회전 여섯 개를 반환한다.
 
-    Index order is identity/Z120/Z240 followed by the corresponding three
-    phase rotations combined with the X180 front/back task equivalence.
-    Each candidate is formed externally as ``raw_pose @ transform``.
+    index 순서는 identity/Z120/Z240 이후, 각 phase 회전에 X180 앞뒤 task
+    동치를 결합한 세 항목이다. 각 후보는 외부에서
+    ``raw_pose @ transform``으로 생성한다.
     """
 
     transforms = []
@@ -77,7 +76,7 @@ PIPE_TASK_SYMMETRY_TRANSFORMS = build_pipe_task_symmetry_transforms()
 
 
 def rotation_distance_rad(pose_a: np.ndarray, pose_b: np.ndarray) -> float:
-    """Return the geodesic SO(3) rotation distance between two poses."""
+    """두 pose 사이의 SO(3) geodesic 회전 거리를 반환한다."""
 
     rotation_a = np.asarray(pose_a, dtype=np.float64)[:3, :3]
     rotation_b = np.asarray(pose_b, dtype=np.float64)[:3, :3]
@@ -87,7 +86,7 @@ def rotation_distance_rad(pose_a: np.ndarray, pose_b: np.ndarray) -> float:
 
 @dataclass(frozen=True)
 class TaskPoseResult:
-    """One raw FoundationPose result and its task-canonical counterpart."""
+    """FoundationPose 원본 결과 하나와 task 기준 canonical 결과."""
 
     frame_id: int
     raw_pose: np.ndarray
@@ -98,7 +97,7 @@ class TaskPoseResult:
 
 
 class PipeTaskPoseCanonicalizer:
-    """Maintain task-pose continuity independently of FoundationPose state."""
+    """FoundationPose 상태와 독립적으로 task pose 연속성을 유지한다."""
 
     def __init__(self, debug: bool = False) -> None:
         self.debug = bool(debug)
@@ -111,7 +110,7 @@ class PipeTaskPoseCanonicalizer:
         return self._previous_canonical_pose.copy()
 
     def reset(self) -> None:
-        """Forget task continuity, for example before a fresh registration."""
+        """새 registration 전과 같이 필요할 때 task 연속성 이력을 지운다."""
 
         self._previous_canonical_pose = None
 
@@ -125,14 +124,14 @@ class PipeTaskPoseCanonicalizer:
         return np.array(pose, copy=True, order="C")
 
     def canonicalize(self, raw_pose: np.ndarray, frame_id: int) -> TaskPoseResult:
-        """Choose the task-equivalent pose closest to the previous output."""
+        """이전 출력에 가장 가까운 task 동치 pose를 선택한다."""
 
         raw = self._validated_pose(raw_pose)
         previous = self._previous_canonical_pose
 
         if previous is None:
-            # Registration starts from the full D-cut CAD pose exactly as
-            # returned by FoundationPose; no task relabeling on frame one.
+            # registration은 FoundationPose가 반환한 전체 D-cut CAD pose에서
+            # 그대로 시작하며 첫 frame에는 task 재지정을 하지 않는다.
             symmetry_index = 0
             canonical = raw.copy()
             raw_delta_deg = None

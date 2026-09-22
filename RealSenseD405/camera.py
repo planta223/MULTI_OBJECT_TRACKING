@@ -1,9 +1,8 @@
-"""Threaded Intel RealSense RGB-D input adapter.
+"""thread 기반 Intel RealSense RGB-D 입력 adapter.
 
-The acquisition thread exclusively owns every librealsense pipeline operation.
-Consumers receive only immutable :class:`D405Frame` snapshots through a
-single-slot :class:`LatestFrameBuffer`; no SDK frame or profile object crosses
-the input boundary.
+획득 thread가 모든 librealsense pipeline 연산을 독점적으로 소유한다. consumer는
+단일 slot :class:`LatestFrameBuffer`를 통해 변경 불가능한 :class:`D405Frame`
+snapshot만 받으며, SDK frame이나 profile 객체는 입력 경계를 통과하지 않는다.
 """
 
 from __future__ import annotations
@@ -26,7 +25,7 @@ _STOP_TIMEOUT_S = 3.0
 
 @dataclass(frozen=True)
 class D405Config:
-    """Stream selection for the standalone D405 acquisition layer."""
+    """독립 실행 D405 획득 계층의 stream 선택값."""
 
     width: int = 848
     height: int = 480
@@ -36,7 +35,7 @@ class D405Config:
 
 @dataclass(frozen=True)
 class D405StreamInfo:
-    """Actual stream parameters selected by librealsense."""
+    """librealsense가 실제로 선택한 stream parameter."""
 
     width: int
     height: int
@@ -45,7 +44,7 @@ class D405StreamInfo:
 
 
 class D405Camera:
-    """Publish aligned RealSense RGB-D frames from one producer thread."""
+    """producer thread 하나에서 정렬된 RealSense RGB-D frame을 제공한다."""
 
     def __init__(
         self,
@@ -95,7 +94,7 @@ class D405Camera:
 
     @property
     def producer_error(self) -> Optional[BaseException]:
-        """The exception that terminated acquisition, if one occurred."""
+        """발생했다면 데이터 획득을 종료시킨 exception을 반환한다."""
 
         with self._state_lock:
             return self._producer_error
@@ -126,14 +125,14 @@ class D405Camera:
             return self._depth_stream_info
 
     def raise_if_failed(self) -> None:
-        """Raise the producer exception in the calling/consumer thread."""
+        """producer exception을 호출한 consumer thread에서 다시 발생시킨다."""
 
         error = self.producer_error
         if error is not None:
             raise RuntimeError("RealSense acquisition thread failed.") from error
 
     def start(self) -> None:
-        """Start the pipeline in its owner thread and wait until it is ready."""
+        """소유 thread에서 pipeline을 시작하고 준비될 때까지 기다린다."""
 
         with self._state_lock:
             if self._thread is not None and self._thread.is_alive():
@@ -166,7 +165,7 @@ class D405Camera:
         self.raise_if_failed()
 
     def stop(self) -> None:
-        """Request producer shutdown and wait for pipeline.stop() to finish."""
+        """producer 종료를 요청하고 pipeline.stop() 완료를 기다린다."""
 
         with self._state_lock:
             thread = self._thread
@@ -187,7 +186,7 @@ class D405Camera:
                 self._thread = None
 
     def get_next_frame(self) -> D405Frame:
-        """Wait for the next frame newer than the last one returned here."""
+        """이곳에서 마지막으로 반환한 것보다 새로운 frame을 기다린다."""
 
         if not self.is_running:
             self.raise_if_failed()
@@ -286,9 +285,9 @@ class D405Camera:
         depth_m = raw_depth.astype(np.float32)
         depth_m *= np.float32(depth_scale)
 
-        # Librealsense defines zero in Z16 as "no depth", and multiplication
-        # already maps it to 0.0 m.  There is no general SDK guarantee that
-        # raw 65535 is invalid/saturated, so it is deliberately preserved.
+        # Librealsense는 Z16의 0을 "depth 없음"으로 정의하며 곱셈 결과도 이미
+        # 0.0 m가 된다. 원본 65535가 무효 또는 포화 값이라는 일반적인 SDK
+        # 보장은 없으므로 의도적으로 그대로 유지한다.
         depth_m[raw_depth == 0] = np.float32(0.0)
 
         aligned_depth_profile = (

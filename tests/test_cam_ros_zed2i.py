@@ -1,4 +1,4 @@
-"""CPU-only tests for the ROS ZED 2i decoder and exact-stamp matcher."""
+"""ROS ZED 2i decoder와 exact-stamp matcher의 CPU 전용 검사."""
 
 from types import SimpleNamespace
 from unittest.mock import patch

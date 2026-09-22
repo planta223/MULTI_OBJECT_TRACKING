@@ -1,4 +1,4 @@
-"""Manual and future automatic segmentation interfaces."""
+"""수동 및 향후 자동 segmentation 인터페이스."""
 
 from .base import Segmenter
 from .factory import create_segmenter

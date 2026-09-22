@@ -1,4 +1,4 @@
-"""CPU-only tests for task-triggered FoundationPose worker lifecycle."""
+"""task로 제어하는 FoundationPose worker 수명주기의 CPU 전용 검사."""
 
 from pathlib import Path
 import os

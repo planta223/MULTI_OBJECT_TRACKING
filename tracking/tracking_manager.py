@@ -1,4 +1,4 @@
-"""Sequential orchestration of one or two independent object trackers."""
+"""독립적인 객체 tracker 한두 개를 순차 orchestration한다."""
 
 from pathlib import Path
 import time
@@ -20,7 +20,7 @@ _LARGE_MASK_OVERLAP_RATIO = 0.5
 
 
 class TrackingManager:
-    """Run configured trackers against one identical FrameData snapshot."""
+    """동일한 FrameData snapshot 하나로 설정된 tracker를 실행한다."""
 
     def __init__(
         self,
@@ -134,7 +134,7 @@ class TrackingManager:
         frame: FrameData,
         masks: Mapping[str, np.ndarray],
     ) -> List[PoseResult]:
-        """Register configured objects on the same frozen frame."""
+        """동일하게 고정된 frame에서 설정된 객체를 registration한다."""
 
         normalized_masks = self._validate_masks(frame, masks)
         cycle_id = self._take_cycle_id()
@@ -160,7 +160,7 @@ class TrackingManager:
         return results
 
     def track_all(self, frame: FrameData) -> List[PoseResult]:
-        """Track configured objects on one identical frame snapshot."""
+        """동일한 frame snapshot 하나에서 설정된 객체를 추적한다."""
 
         cycle_id = self._take_cycle_id()
         results: List[PoseResult] = []

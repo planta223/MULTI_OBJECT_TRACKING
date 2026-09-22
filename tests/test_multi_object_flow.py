@@ -1,4 +1,4 @@
-"""CPU-only dual-object orchestration and visualization regression tests."""
+"""다중 객체 orchestration과 visualization의 CPU 전용 회귀 검사."""
 
 from pathlib import Path
 from unittest.mock import patch

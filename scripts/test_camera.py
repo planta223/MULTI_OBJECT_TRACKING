@@ -1,4 +1,4 @@
-"""Camera-only RGB-D smoke test without pose inference."""
+"""pose 추론 없이 카메라만 확인하는 RGB-D smoke test."""
 
 import argparse
 from pathlib import Path

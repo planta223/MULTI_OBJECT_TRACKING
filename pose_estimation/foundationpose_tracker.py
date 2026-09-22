@@ -1,4 +1,4 @@
-"""FoundationPose state and CAD assets for one tracked object."""
+"""추적 객체 하나의 FoundationPose 상태와 CAD asset."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +21,7 @@ _MIN_VALID_DEPTH_PIXELS = 4
 
 @dataclass(frozen=True)
 class CadModel:
-    """Per-object CAD data in meters plus its oriented bounding box."""
+    """meter 단위 객체별 CAD 데이터와 oriented bounding box."""
 
     mesh: Any
     model_path: Path
@@ -31,7 +31,7 @@ class CadModel:
 
 
 def load_cad_model(object_config: ObjectConfig) -> CadModel:
-    """Load, merge, scale, and validate one CAD model with trimesh."""
+    """trimesh로 CAD 모델 하나를 읽고 병합·확대/축소·검증한다."""
 
     try:
         import trimesh
@@ -132,7 +132,7 @@ def load_cad_model(object_config: ObjectConfig) -> CadModel:
 
 
 class FoundationPoseTracker:
-    """Manage one object-specific FoundationPose estimator and its pose_last state."""
+    """객체별 FoundationPose estimator 하나와 pose_last 상태를 관리한다."""
 
     def __init__(
         self,
@@ -163,12 +163,12 @@ class FoundationPoseTracker:
 
     @staticmethod
     def _foundationpose_input(array: np.ndarray) -> np.ndarray:
-        """Return a writable C-contiguous view/copy for PyTorch interop.
+        """PyTorch 연동을 위해 쓰기 가능한 C-contiguous view/copy를 반환한다.
 
-        FrameData owns read-only snapshots by design.  FoundationPose passes
-        its NumPy inputs to ``torch.as_tensor()``, which requires writable
-        arrays for supported behavior.  ``np.require`` reuses an array that
-        already satisfies both requirements and copies only when necessary.
+        FrameData는 설계상 읽기 전용 snapshot을 소유한다. FoundationPose는 NumPy
+        입력을 ``torch.as_tensor()``에 전달하며, 지원되는 동작을 위해 쓰기 가능한
+        배열이 필요하다. ``np.require``는 두 조건을 이미 만족하는 배열을 재사용하고
+        필요할 때만 복사한다.
         """
 
         return np.require(array, requirements=("C", "W"))
@@ -178,7 +178,7 @@ class FoundationPoseTracker:
         frame: FrameData,
         mask: np.ndarray,
     ) -> np.ndarray:
-        """Normalize a numeric binary mask and validate usable depth support."""
+        """숫자형 이진 mask를 정규화하고 사용 가능한 depth 영역을 검증한다."""
 
         if not isinstance(mask, np.ndarray):
             raise TypeError(f"Mask for {self.object_id} must be a NumPy array.")
@@ -362,6 +362,5 @@ class FoundationPoseTracker:
         self.last_result = result
         return result
 
-# Compatibility name retained for the proven tracking layer contract.
+# 검증된 tracking 계층 계약과의 호환성을 위해 이름을 유지한다.
 ObjectTracker = FoundationPoseTracker
-

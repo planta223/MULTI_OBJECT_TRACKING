@@ -1,1 +1,1 @@
-"""Development and regression entrypoints."""
+"""개발 및 회귀 검사용 진입점."""

@@ -1,4 +1,4 @@
-"""Interactive polygon-mask selection on a frozen RGB frame."""
+"""고정된 RGB frame에서 대화식 polygon mask를 선택한다."""
 
 from typing import Dict, List, Mapping, Sequence, Tuple
 
@@ -13,11 +13,11 @@ Point = Tuple[int, int]
 
 
 class SegmentationCancelled(RuntimeError):
-    """Raised when the user cancels manual mask selection."""
+    """사용자가 수동 mask 선택을 취소하면 발생한다."""
 
 
 class ManualPolygonSegmenter(Segmenter):
-    """Collect one polygon mask for each configured object ID."""
+    """설정된 각 객체 ID에 대해 polygon mask 하나를 수집한다."""
 
     def __init__(self, object_ids: Sequence[str]) -> None:
         if not object_ids:

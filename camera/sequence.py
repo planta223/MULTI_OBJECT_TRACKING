@@ -1,4 +1,4 @@
-"""Offline RGB-D sequence source for deterministic regression tests."""
+"""결정론적 회귀 테스트를 위한 offline RGB-D sequence 입력."""
 
 import csv
 import re
@@ -16,16 +16,16 @@ PathLike = Union[str, Path]
 
 
 class SequenceFrameSource(CameraSource):
-    """Read aligned RGB-D pairs from configurable sequence paths.
+    """설정 가능한 sequence 경로에서 정렬된 RGB-D 쌍을 읽는다.
 
-    The defaults support FoundationPose's ``sequence01/rgb``, ``depth``, and
-    ``K.txt`` layout. D405 Study recordings are supported by passing its data
-    directory as ``sequence_root``, a sequence-specific ``rgb_glob`` such as
-    ``"refine01_*.png"``, and ``K_path="intrinsic/refine01_K.txt"``.
+    기본값은 FoundationPose의 ``sequence01/rgb``, ``depth``, ``K.txt`` 구조를
+    지원한다. D405 Study 녹화 데이터는 데이터 디렉터리를 ``sequence_root``로,
+    ``"refine01_*.png"`` 같은 pattern을 ``rgb_glob``으로,
+    ``K_path="intrinsic/refine01_K.txt"``를 전달해 사용할 수 있다.
 
-    Integer depth images are raw sensor values and require ``depth_scale`` in
-    meters per unit. Floating-point depth images are assumed to already be in
-    meters. This source has no dependency on Pipe CAD or FoundationPose.
+    정수 depth 영상은 센서 raw 값이므로 단위당 meter인 ``depth_scale``이
+    필요하다. Floating-point depth 영상은 이미 meter 단위라고 가정한다. 이
+    입력은 Pipe CAD나 FoundationPose에 의존하지 않는다.
     """
 
     def __init__(
@@ -207,8 +207,8 @@ class SequenceFrameSource(CameraSource):
         else:
             raise TypeError(f"Unsupported depth dtype {depth.dtype} at {path}")
 
-        # Preserve the threshold used by the verified D405/FoundationPose
-        # scripts: sub-millimeter values are treated as invalid depth.
+        # 검증된 D405/FoundationPose 스크립트의 기준을 유지한다.
+        # 1 millimeter 미만의 값은 유효하지 않은 depth로 처리한다.
         depth_m = np.array(depth_m, dtype=np.float32, copy=True, order="C")
         depth_m[depth_m < 0.001] = 0.0
         return depth_m

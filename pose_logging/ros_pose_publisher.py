@@ -1,8 +1,8 @@
-"""Non-blocking ROS2 output adapter for the final processed Pipe pose.
+"""최종 후처리 Pipe pose를 위한 non-blocking ROS2 출력 adapter.
 
-ROS imports are deliberately lazy.  The tracking and pose-processing layers
-remain usable in non-ROS environments, and this adapter only serializes the
-already-final ``C_T_P`` selected by the application.
+ROS import는 의도적으로 지연한다. tracking 및 pose 처리 계층은 ROS가 없는
+환경에서도 사용할 수 있으며, 이 adapter는 애플리케이션이 이미 선택한 최종
+``C_T_P``만 직렬화한다.
 """
 
 from importlib import import_module
@@ -17,9 +17,9 @@ from pose_processing.z_axis_stabilizer import rotation_diagnostics
 LEFT_PIPE_POSE_TOPIC = "/vision/left_pipe/pose"
 LEFT_PIPE_STATUS_TOPIC = "/vision/left_pipe/tracking_status"
 
-# FoundationPose normally returns a valid SO(3) matrix to floating-point
-# precision.  These limits reject a genuinely corrupt/non-rigid transform but
-# allow tiny inference/numerical drift before the final SVD projection.
+# FoundationPose는 일반적으로 부동소수점 정밀도 범위에서 유효한 SO(3) 행렬을
+# 반환한다. 아래 제한은 실제로 손상되었거나 rigid하지 않은 transform을 거부하되,
+# 최종 SVD projection 전의 작은 추론/수치 오차는 허용한다.
 _MAX_ORTHOGONALITY_ERROR = 5.0e-2
 _MAX_DETERMINANT_ERROR = 5.0e-2
 _HOMOGENEOUS_ROW_ATOL = 1.0e-6
@@ -40,7 +40,7 @@ def _load_ros_output_dependencies():
 
 
 def _qos_enum(qos: Any, modern_name: str, legacy_name: str):
-    """Support both Foxy and newer rclpy QoS enum spellings."""
+    """Foxy와 최신 rclpy의 QoS enum 표기를 모두 지원한다."""
 
     value = getattr(qos, modern_name, None)
     if value is None:
@@ -49,7 +49,7 @@ def _qos_enum(qos: Any, modern_name: str, legacy_name: str):
 
 
 def _pose_qos(qos: Any):
-    """Keep only the newest pose and never wait for reliable delivery."""
+    """최신 pose만 유지하고 reliable 전송을 기다리지 않는다."""
 
     history = _qos_enum(qos, "HistoryPolicy", "QoSHistoryPolicy")
     reliability = _qos_enum(qos, "ReliabilityPolicy", "QoSReliabilityPolicy")
@@ -63,7 +63,7 @@ def _pose_qos(qos: Any):
 
 
 def _status_qos(qos: Any):
-    """Keep the latest state available to late-joining Control processes."""
+    """늦게 참여한 Control process도 최신 상태를 받을 수 있게 유지한다."""
 
     history = _qos_enum(qos, "HistoryPolicy", "QoSHistoryPolicy")
     reliability = _qos_enum(qos, "ReliabilityPolicy", "QoSReliabilityPolicy")
@@ -77,7 +77,7 @@ def _status_qos(qos: Any):
 
 
 def _project_to_so3(rotation: np.ndarray) -> np.ndarray:
-    """Validate a near-rotation and project small numerical drift onto SO(3)."""
+    """회전에 가까운 행렬을 검증하고 작은 수치 오차를 SO(3)에 투영한다."""
 
     diagnostics = rotation_diagnostics(rotation)
     if diagnostics.determinant <= 0.0:
@@ -99,8 +99,8 @@ def _project_to_so3(rotation: np.ndarray) -> np.ndarray:
     u, _, vt = np.linalg.svd(np.asarray(rotation, dtype=np.float64))
     normalized = u @ vt
     if np.linalg.det(normalized) <= 0.0:
-        # This is defensive; the positive input determinant should already
-        # make the nearest orthogonal matrix right-handed.
+        # 방어적 처리다. 양수인 입력 determinant만으로도 가장 가까운 직교 행렬은
+        # 이미 오른손 좌표계여야 한다.
         u[:, -1] *= -1.0
         normalized = u @ vt
     normalized_diagnostics = rotation_diagnostics(normalized)
@@ -113,7 +113,7 @@ def _project_to_so3(rotation: np.ndarray) -> np.ndarray:
 
 
 def _rotation_to_quaternion(rotation: np.ndarray) -> np.ndarray:
-    """Convert an SO(3) matrix to normalized quaternion ``[x, y, z, w]``."""
+    """SO(3) 행렬을 정규화된 quaternion ``[x, y, z, w]``로 변환한다."""
 
     matrix = np.asarray(rotation, dtype=np.float64)
     trace = float(np.trace(matrix))
@@ -174,15 +174,15 @@ def _rotation_to_quaternion(rotation: np.ndarray) -> np.ndarray:
     if not np.isfinite(norm) or norm <= _QUATERNION_NORM_EPSILON:
         raise ValueError("Pose rotation produced an invalid quaternion.")
     quaternion /= norm
-    # q and -q encode the same rotation.  Fixing the sign avoids gratuitous
-    # sign flips in logs and simple downstream continuity checks.
+    # q와 -q는 같은 회전을 나타낸다. 부호를 고정하면 log와 단순 downstream
+    # 연속성 검사에서 불필요한 부호 반전을 피할 수 있다.
     if quaternion[3] < 0.0:
         quaternion = -quaternion
     return quaternion
 
 
 def pose_components(pose: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """Return validated metric translation and normalized xyzw quaternion."""
+    """검증된 meter 단위 translation과 정규화된 xyzw quaternion을 반환한다."""
 
     try:
         matrix = np.asarray(pose, dtype=np.float64)
@@ -205,7 +205,7 @@ def pose_components(pose: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def _source_header(frame: FrameData) -> Tuple[int, str]:
-    """Require original ROS acquisition metadata; never substitute wall time."""
+    """원본 ROS 획득 metadata를 요구하며 wall time으로 대체하지 않는다."""
 
     if frame.source_timestamp_ns is None:
         raise ValueError("Frame has no exact source ROS timestamp.")
@@ -215,7 +215,7 @@ def _source_header(frame: FrameData) -> Tuple[int, str]:
 
 
 class RosPipePosePublisher:
-    """Publish the final left-Pipe ``C_T_P`` on the camera source node.
+    """최종 left-Pipe ``C_T_P``를 카메라 source node에서 발행한다.
 
     ``publish_pose`` performs only bounded matrix checks, message construction,
     and a best-effort depth-one publish.  It contains no waits and never feeds
@@ -243,7 +243,7 @@ class RosPipePosePublisher:
         self._last_status = None
 
     def publish_status(self, status: str) -> bool:
-        """Publish one of REGISTERING/TRACKING/LOST/INVALID without waiting."""
+        """REGISTERING/TRACKING/LOST/INVALID 중 하나를 기다림 없이 발행한다."""
 
         if status not in {"REGISTERING", "TRACKING", "LOST", "INVALID"}:
             raise ValueError(f"Unsupported tracking status: {status!r}.")
@@ -253,7 +253,7 @@ class RosPipePosePublisher:
         message.data = status
         try:
             self._status_publisher.publish(message)
-        except Exception as error:  # DDS output must not stop visual tracking.
+        except Exception as error:  # DDS 출력 오류가 visual tracking을 중단시키면 안 된다.
             self._node.get_logger().error(
                 f"Failed to publish left Pipe tracking status: {error}"
             )
@@ -262,7 +262,7 @@ class RosPipePosePublisher:
         return True
 
     def publish_pose(self, pose: np.ndarray, frame: FrameData) -> bool:
-        """Publish a valid final pose stamped with its source image header."""
+        """source image header의 stamp를 사용해 유효한 최종 pose를 발행한다."""
 
         try:
             translation, quaternion = pose_components(pose)
@@ -285,7 +285,7 @@ class RosPipePosePublisher:
             )
             self.publish_status("INVALID")
             return False
-        except Exception as error:  # Keep DDS failures out of the tracking loop.
+        except Exception as error:  # DDS 오류가 tracking loop에 영향을 주지 않게 한다.
             self._node.get_logger().error(
                 f"Failed to publish left Pipe pose: {error}"
             )
@@ -296,12 +296,12 @@ class RosPipePosePublisher:
         return True
 
     def destroy(self) -> None:
-        """Release publishers before their owning camera node is destroyed."""
+        """소유한 카메라 node가 제거되기 전에 publisher를 해제한다."""
 
         for publisher in (self._pose_publisher, self._status_publisher):
             try:
                 self._node.destroy_publisher(publisher)
             except Exception:
-                # Node shutdown is already best-effort in the application
-                # finally path; there is no tracking result to protect here.
+                # 애플리케이션 finally 경로의 node 종료 자체가 best-effort이며,
+                # 여기에는 보호해야 할 tracking 결과가 없다.
                 pass

@@ -1,4 +1,4 @@
-"""Map the sibling RealSenseD405 package to the application frame contract."""
+"""인접한 RealSenseD405 패키지를 애플리케이션 frame 계약에 연결한다."""
 
 from config import CameraConfig
 
@@ -14,7 +14,7 @@ from .base import CameraSource, FrameData
 
 
 class RealSenseD405Source(CameraSource):
-    """Convert D405 sensor frames into camera-neutral application frames."""
+    """D405 센서 프레임을 카메라 공통 애플리케이션 프레임으로 변환한다."""
 
     def __init__(self, config: CameraConfig) -> None:
         if config.camera_type != "cam_d405":
@@ -76,6 +76,6 @@ class RealSenseD405Source(CameraSource):
 
 
 def create_source(config: CameraConfig) -> CameraSource:
-    """Factory hook used by :mod:`camera.factory`."""
+    """:mod:`camera.factory`가 호출하는 생성 함수."""
 
     return RealSenseD405Source(config)

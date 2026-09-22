@@ -1,4 +1,4 @@
-"""FoundationPose integration boundary."""
+"""FoundationPose 연동 경계."""
 
 from .foundationpose_runtime import FoundationPoseRuntime
 from .foundationpose_tracker import FoundationPoseTracker

@@ -1,4 +1,4 @@
-"""Application-wide constants that do not vary between experiments."""
+"""실험마다 바뀌지 않는 애플리케이션 공통 상수."""
 
 from enum import Enum
 
@@ -15,7 +15,7 @@ PIPE_LENGTH_AXIS_INDEX = AXIS_Z
 
 
 class TrackingState(str, Enum):
-    """Lifecycle state of one tracked object."""
+    """Tracking 객체 하나의 수명주기 상태."""
 
     UNINITIALIZED = "uninitialized"
     TRACKING = "tracking"
@@ -23,7 +23,7 @@ class TrackingState(str, Enum):
 
 
 class TrackingMode(str, Enum):
-    """FoundationPose operation that produced a pose result."""
+    """Pose 결과를 생성한 FoundationPose 연산 종류."""
 
     REGISTER = "register"
     TRACK = "track"

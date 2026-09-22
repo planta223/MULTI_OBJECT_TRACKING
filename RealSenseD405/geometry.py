@@ -1,4 +1,4 @@
-"""Basic camera geometry independent of FoundationPose."""
+"""FoundationPose와 독립적인 기본 카메라 geometry."""
 
 from typing import Any
 
@@ -6,7 +6,7 @@ import numpy as np
 
 
 def make_camera_matrix(intrinsics: Any) -> np.ndarray:
-    """Build a 3x3 K matrix from a RealSense intrinsics object."""
+    """RealSense intrinsics 객체에서 3x3 K 행렬을 만든다."""
 
     return np.array(
         [
@@ -19,7 +19,7 @@ def make_camera_matrix(intrinsics: Any) -> np.ndarray:
 
 
 def deproject_pixel(u: int, v: int, depth_m: float, K: np.ndarray) -> np.ndarray:
-    """Deproject one pixel with the pinhole model into camera XYZ meters."""
+    """pixel 하나를 pinhole 모델로 카메라 XYZ meter 좌표에 역투영한다."""
 
     matrix = np.asarray(K, dtype=np.float64)
     if matrix.shape != (3, 3):

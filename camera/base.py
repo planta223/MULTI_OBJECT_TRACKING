@@ -1,4 +1,4 @@
-"""Camera-neutral frame contract and minimal source interface."""
+"""카메라 공통 프레임 계약과 최소 입력 인터페이스."""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ def _readonly_copy(array: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class FrameData:
-    """One synchronized RGB-D observation in application units."""
+    """애플리케이션 단위로 표현한 동기화 RGB-D 관측값 하나."""
 
     source_frame_id: int
     rgb: np.ndarray
@@ -25,10 +25,9 @@ class FrameData:
     timestamp_domain: Optional[str]
     host_wall_time_s: float
     host_monotonic_time_s: float
-    # Exact ROS metadata is optional because direct SDK and recorded-sequence
-    # sources do not necessarily have a ROS Header.  ROS adapters should carry
-    # these fields unchanged so downstream outputs can preserve acquisition
-    # time and the real optical frame instead of inventing either value.
+    # SDK 직접 입력과 녹화 sequence에는 ROS Header가 없을 수 있으므로 정확한
+    # ROS metadata는 선택 사항이다. ROS adapter는 downstream 출력이 임의의
+    # 값 대신 실제 획득 시각과 optical frame을 보존하도록 이 필드를 유지한다.
     source_timestamp_ns: Optional[int] = None
     camera_frame_id: Optional[str] = None
 
@@ -86,7 +85,7 @@ class FrameData:
 
 
 class CameraSource(ABC):
-    """Minimal camera interface consumed by the tracking application."""
+    """Tracking 애플리케이션이 사용하는 최소 카메라 인터페이스."""
 
     @property
     def device_name(self) -> Optional[str]:
@@ -98,7 +97,7 @@ class CameraSource(ABC):
 
     @property
     def depth_scale(self) -> float:
-        """Meters represented by one depth value; metric float sources use 1."""
+        """Depth 값 1이 나타내는 meter 수. meter float 입력은 1을 사용한다."""
 
         return 1.0
 
@@ -111,7 +110,7 @@ class CameraSource(ABC):
         return None
 
     def raise_if_failed(self) -> None:
-        """Propagate asynchronous acquisition failures, if the source has any."""
+        """입력에서 발생한 비동기 획득 오류가 있으면 호출자에게 전달한다."""
 
     @abstractmethod
     def start(self) -> None:

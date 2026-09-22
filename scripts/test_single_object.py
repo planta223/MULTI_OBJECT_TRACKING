@@ -1,4 +1,4 @@
-"""Live single-Pipe camera/FoundationPose regression."""
+"""실시간 단일 Pipe 카메라/FoundationPose 회귀 검사."""
 
 import argparse
 import math
@@ -278,10 +278,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         try:
             camera.start()
             if args.camera_type == "cam_ros_zed2i":
-                # This is the single-object LEFT-Pipe entrypoint, so Pipe1 has
-                # an explicit role here.  Reuse the camera subscriber node;
-                # rclpy publish() enqueues a best-effort depth-one sample and
-                # does not add another executor or wait to the tracking loop.
+                # 단일 객체 LEFT-Pipe 진입점이므로 여기서는 Pipe1 역할이 명확하다.
+                # 카메라 subscriber node를 재사용한다. rclpy publish()는
+                # best-effort depth-one sample을 enqueue하며 tracking loop에
+                # executor나 대기를 추가하지 않는다.
                 pose_publisher = RosPipePosePublisher(
                     camera.ros_node,
                     pose_topic=args.left_pipe_pose_topic,
@@ -303,8 +303,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(f"Frozen frame for mask: {frozen_frame.source_frame_id}")
 
             masks = segmenter.segment(frozen_frame)
-            # A new registration starts a new application-level stable basis.
-            # FoundationPose retains its own independent raw pose chain.
+            # 새 registration은 애플리케이션 수준의 안정적인 basis를 새로 시작한다.
+            # FoundationPose는 자체적인 독립 원본 pose chain을 유지한다.
             pose_processor.reset()
             register_result = manager.register_all(frozen_frame, masks)[0]
             print_result(register_result)
@@ -316,8 +316,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 register_result.source_frame_id,
             )
             if pose_publisher is not None:
-                # output_pose is the application-level final C_T_P.  Do not
-                # publish the centered visualization transform.
+                # output_pose는 애플리케이션 수준의 최종 C_T_P다.
+                # 중심을 옮긴 visualization transform은 발행하지 않는다.
                 pose_publisher.publish_pose(
                     processed_pose.output_pose,
                     frozen_frame,

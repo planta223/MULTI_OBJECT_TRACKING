@@ -1,4 +1,4 @@
-"""CPU-only single/multi-object checks for application pose processing."""
+"""애플리케이션 pose 처리의 CPU 전용 단일/다중 객체 검사."""
 
 import math
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""CPU-only synthetic checks for continuous Z-axis pose stabilization."""
+"""연속적인 Z축 pose 안정화를 위한 CPU 전용 합성 검사."""
 
 import math
 from pathlib import Path
@@ -29,7 +29,7 @@ def _normalize(vector: Sequence[float]) -> np.ndarray:
 
 
 def _rotation_with_z(z_axis: Sequence[float], axial_phase_deg: float) -> np.ndarray:
-    """Build a synthetic proper rotation with a requested Z and axial phase."""
+    """지정한 Z축과 축 방향 phase를 가진 합성 proper rotation을 만든다."""
 
     z_axis = _normalize(z_axis)
     camera_basis = np.eye(3, dtype=np.float64)

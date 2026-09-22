@@ -1,4 +1,4 @@
-"""CPU-only checks for final-pose validation and ROS message population."""
+"""최종 pose 검증과 ROS message 채우기의 CPU 전용 검사."""
 
 from types import SimpleNamespace
 from unittest.mock import patch

@@ -1,4 +1,4 @@
-"""Generate initial FoundationPose masks with Ultralytics YOLO segmentation."""
+"""Ultralytics YOLO segmentation으로 초기 FoundationPose mask를 생성한다."""
 
 from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Union
@@ -14,7 +14,7 @@ PathLike = Union[str, Path]
 
 
 def _as_numpy(value: Any) -> np.ndarray:
-    """Convert an Ultralytics NumPy/Torch result field to a NumPy array."""
+    """Ultralytics NumPy/Torch 결과 field를 NumPy 배열로 변환한다."""
 
     if hasattr(value, "detach"):
         value = value.detach()
@@ -26,7 +26,7 @@ def _as_numpy(value: Any) -> np.ndarray:
 
 
 class YoloSegmenter(Segmenter):
-    """Assign initial instance masks to object IDs from left to right."""
+    """초기 instance mask를 왼쪽부터 객체 ID에 할당한다."""
 
     def __init__(
         self,
@@ -106,7 +106,7 @@ class YoloSegmenter(Segmenter):
         return normalized
 
     def segment(self, frame: FrameData) -> Mapping[str, np.ndarray]:
-        # Ultralytics documents HWC uint8 NumPy sources as BGR. FrameData is RGB.
+        # Ultralytics에서 HWC uint8 NumPy source는 BGR이며 FrameData는 RGB다.
         image_bgr = np.ascontiguousarray(frame.rgb[..., ::-1])
         predict_args = {
             "source": image_bgr,

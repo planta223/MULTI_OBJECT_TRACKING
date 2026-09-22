@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preload FoundationPose at unit task 3, activate it at 4, and stop at 6."""
+"""unit task 3에서 FoundationPose를 preload하고 4에서 활성화해 6에서 종료한다."""
 
 import argparse
 import os
@@ -90,7 +90,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 
 
 class WorkerProcessController:
-    """Own one worker process group so CUDA resources die with the worker."""
+    """worker와 CUDA 리소스가 함께 종료되도록 process group 하나를 소유한다."""
 
     def __init__(
         self,
@@ -162,7 +162,7 @@ class WorkerProcessController:
         return True
 
     def activate(self) -> bool:
-        """Release a running worker from its one-shot preload gate."""
+        """실행 중인 worker의 일회성 preload gate를 해제한다."""
 
         if not self.is_running or self._activation_write_fd is None:
             return False
@@ -208,7 +208,7 @@ class WorkerProcessController:
 
 
 class TaskTriggeredWorker:
-    """Translate task transitions into a single worker lifecycle."""
+    """task 전환을 단일 worker 수명주기로 변환한다."""
 
     def __init__(
         self,
@@ -292,7 +292,7 @@ class TaskTriggeredWorker:
             )
             self.controller.stop()
             self._log("Worker stopped")
-            # A resumed task-4 stream is a new activation after a timeout.
+            # timeout 후 재개한 task 4 stream은 새로운 활성화로 처리한다.
             self._last_task_id = None
             self._last_task_time = None
 

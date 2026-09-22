@@ -1,4 +1,4 @@
-"""Pose result contract shared by the pose core and output adapters."""
+"""pose 핵심 계층과 출력 adapter가 공유하는 결과 계약."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -10,10 +10,10 @@ from constants import TrackingMode, TrackingState
 
 @dataclass(frozen=True)
 class PoseResult:
-    """Result for one object in one processing cycle.
+    """처리 주기 한 번에서 객체 하나에 대한 결과.
 
-    When present, ``pose`` is the authoritative 4x4 transform from the
-    original CAD coordinate system to the OpenCV camera coordinate system.
+    ``pose``가 있으면 원본 CAD 좌표계에서 OpenCV 카메라 좌표계로 변환하는
+    기준 4x4 transform이다.
     """
 
     cycle_id: int

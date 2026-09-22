@@ -1,4 +1,4 @@
-"""Live dual-object camera regression using one frame for Pipe1 and Pipe2."""
+"""Pipe1과 Pipe2가 frame 하나를 공유하는 실시간 다중 객체 카메라 회귀 검사."""
 
 import argparse
 from pathlib import Path
@@ -358,8 +358,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     status_topic=args.left_pipe_status_topic,
                 )
                 if args.left_pipe_object_id is None:
-                    # pipe1/pipe2 are registration identities, not robot-hand
-                    # identities.  Advertise INVALID but never guess a mapping.
+                    # pipe1/pipe2는 registration 식별자이며 robot hand 식별자가
+                    # 아니다. mapping을 추측하지 않고 INVALID를 알린다.
                     pose_publisher.publish_status("INVALID")
                     print(
                         "Left Pipe pose publication is disabled: set "
@@ -391,7 +391,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 mask_vis = cv2.cvtColor(frozen_frame.rgb, cv2.COLOR_RGB2BGR)
                 overlay = mask_vis.copy()
 
-                # BGR: pipe1=yellow, pipe2=magenta
+                # BGR: pipe1=노란색, pipe2=자홍색
                 overlay[masks[PIPE1_ID]] = (0, 255, 255)
                 overlay[masks[PIPE2_ID]] = (255, 0, 255)
 
@@ -432,9 +432,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 ).output_pose
 
             if pose_publisher is not None and args.left_pipe_object_id is not None:
-                # output_pose is final C_T_P after the configured application
-                # post-processing.  The OBB-centered overlay transform is not
-                # exposed to control.
+                # output_pose는 설정된 애플리케이션 후처리 이후의 최종 C_T_P다.
+                # OBB 중심 overlay transform은 control에 노출하지 않는다.
                 pose_publisher.publish_pose(
                     registration_processed_poses[args.left_pipe_object_id],
                     frozen_frame,
@@ -445,7 +444,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 camera.raise_if_failed()
                 frame = camera.get_next_frame()
 
-                # Exactly one camera acquisition is shared by both trackers.
+                # 두 tracker가 정확히 한 번의 카메라 획득 결과를 공유한다.
                 results = _results_by_object(manager.track_all(frame))
                 processed_poses: Dict[str, np.ndarray] = {}
                 for object_id in (PIPE1_ID, PIPE2_ID):
@@ -465,7 +464,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                             frame,
                         )
                     else:
-                        # No old pose is resent with this frame's timestamp.
+                        # 이전 pose를 현재 frame timestamp로 다시 보내지 않는다.
                         pose_publisher.publish_status("LOST")
 
                 image = _draw_results(

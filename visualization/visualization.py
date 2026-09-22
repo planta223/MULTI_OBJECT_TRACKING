@@ -1,4 +1,4 @@
-"""Minimal OpenCV pose overlay for live smoke testing."""
+"""실시간 smoke test를 위한 최소 OpenCV pose overlay."""
 
 from itertools import product
 from typing import Optional, Sequence, Tuple
@@ -43,7 +43,7 @@ def draw_pose_overlay(
     label: str = "Pipe1",
     axis_length_m: float = 0.05,
 ) -> np.ndarray:
-    """Draw the oriented CAD bbox and XYZ axes over an RGB image."""
+    """RGB image 위에 oriented CAD bbox와 XYZ축을 그린다."""
 
     image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
     image = draw_pose_overlay_on_bgr(
@@ -81,7 +81,7 @@ def draw_pose_overlay_on_bgr(
     overlay_color: Tuple[int, int, int] = (0, 255, 255),
     text_origin: Tuple[int, int] = (15, 28),
 ) -> np.ndarray:
-    """Add one pose to a BGR canvas so multiple objects can be composed."""
+    """여러 객체를 합성할 수 있도록 BGR canvas에 pose 하나를 추가한다."""
 
     image = np.array(image_bgr, copy=True, order="C")
     centered_to_camera = pose @ np.linalg.inv(to_origin)

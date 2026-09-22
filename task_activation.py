@@ -1,10 +1,9 @@
-"""One-shot activation gate inherited from the task supervisor.
+"""task supervisor에서 상속받는 일회성 활성화 gate.
 
-The supervisor starts the heavyweight worker during the preload task and passes
-the read side of an anonymous pipe through this environment variable.  A byte
-written at the activation task remains buffered if model initialization is
-still in progress, so the task-4 trigger cannot be lost during a slow startup.
-Standalone workers do not receive the variable and continue immediately.
+supervisor는 preload task에서 고비용 worker를 시작하고 익명 pipe의 읽기 쪽을
+이 환경 변수로 전달한다. 모델 초기화가 진행 중이어도 활성화 task에서 쓴 byte는
+buffer에 남으므로 느린 시작 과정에서 task 4 trigger가 유실되지 않는다.
+독립 실행한 worker는 이 변수를 받지 않고 즉시 계속 진행한다.
 """
 
 import os
@@ -14,10 +13,10 @@ ACTIVATION_FD_ENV = "FOUNDATIONPOSE_ACTIVATION_FD"
 
 
 def wait_for_supervisor_activation() -> bool:
-    """Block for the supervisor's one-shot activation, if one was inherited.
+    """supervisor의 일회성 활성화 gate를 상속받았다면 기다린다.
 
-    Returns ``True`` for a supervisor-managed worker and ``False`` when the
-    worker was launched directly.
+    supervisor가 관리하는 worker이면 ``True``, 직접 실행한 worker이면
+    ``False``를 반환한다.
     """
 
     raw_fd = os.environ.pop(ACTIVATION_FD_ENV, None)

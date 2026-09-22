@@ -1,11 +1,11 @@
-"""Single-object FoundationPose smoke test using the recorded T-LESS #6 data.
+"""녹화된 T-LESS #6 데이터를 사용하는 단일 객체 FoundationPose smoke test.
 
-T-LESS #6 is used only to verify the real integration path:
+T-LESS #6은 실제 연동 경로 확인에만 사용한다.
 
     SequenceFrameSource -> ObjectTracker -> FoundationPose register/track
 
-It is not a substitute for either Pipe CAD and this script performs no
-dual-object or accuracy evaluation.
+어느 Pipe CAD도 대신하지 않으며 이 script는 다중 객체 또는 정확도 평가를
+수행하지 않는다.
 """
 
 import argparse

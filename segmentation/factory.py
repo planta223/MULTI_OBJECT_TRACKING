@@ -1,4 +1,4 @@
-"""Create the configured initial-registration segmenter."""
+"""설정된 초기 registration segmenter를 생성한다."""
 
 from typing import Sequence
 
@@ -10,7 +10,7 @@ def create_segmenter(
     config: SegmentationConfig,
     object_ids: Sequence[str],
 ) -> Segmenter:
-    """Build a segmenter without importing optional YOLO dependencies early."""
+    """선택 사항인 YOLO 의존성을 미리 import하지 않고 segmenter를 만든다."""
 
     if config.mode == "manual":
         from .manual import ManualPolygonSegmenter

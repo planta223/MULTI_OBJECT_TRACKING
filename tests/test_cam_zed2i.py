@@ -1,4 +1,4 @@
-"""CPU-only contract tests for the direct ZED 2i camera adapter."""
+"""ZED 2i 직접 카메라 adapter의 CPU 전용 계약 검사."""
 
 from unittest.mock import patch
 

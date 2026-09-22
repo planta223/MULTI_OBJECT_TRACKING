@@ -1,8 +1,8 @@
-"""Per-object application-level pose post-processing.
+"""객체별 애플리케이션 수준 pose 후처리.
 
-This module consumes raw FoundationPose outputs but never owns or mutates a
-FoundationPose estimator.  Create one :class:`ObjectPoseProcessor` per tracked
-object so temporal post-processing state cannot leak between objects.
+이 모듈은 FoundationPose 원본 출력을 사용하지만 FoundationPose estimator를
+소유하거나 변경하지 않는다. 시간 기반 후처리 상태가 객체 사이에 섞이지 않도록
+추적 객체마다 :class:`ObjectPoseProcessor` 인스턴스를 하나씩 생성한다.
 """
 
 from dataclasses import dataclass
@@ -31,7 +31,7 @@ def _immutable_pose(pose: np.ndarray, *, name: str) -> np.ndarray:
 
 @dataclass(frozen=True)
 class ProcessedPose:
-    """Raw estimator output and the distinct application output pose."""
+    """estimator 원본 출력과 별도로 생성한 애플리케이션 출력 pose."""
 
     raw_pose: np.ndarray
     output_pose: np.ndarray
@@ -58,12 +58,11 @@ class ProcessedPose:
 
 
 class ObjectPoseProcessor:
-    """Own independent output-pose state for one tracked object.
+    """추적 객체 하나의 독립적인 출력 pose 상태를 소유한다.
 
-    Z-axis stabilization and discrete task symmetry remain separate.  When
-    stabilization is enabled it always consumes the raw pose directly.  Task
-    symmetry may still run as a diagnostic, but its result is not fed into the
-    stabilizer.
+    Z축 안정화와 이산 task symmetry는 서로 분리한다. 안정화를 활성화하면 항상
+    원본 pose를 직접 사용한다. task symmetry를 진단 목적으로 실행할 수 있지만
+    그 결과를 stabilizer에 전달하지 않는다.
     """
 
     def __init__(
@@ -91,18 +90,18 @@ class ObjectPoseProcessor:
 
     @property
     def z_axis_initialized(self) -> bool:
-        """Whether this object's Z-axis stabilizer currently has history."""
+        """이 객체의 Z축 stabilizer가 현재 이력을 갖고 있는지 나타낸다."""
 
         return self._z_axis_stabilizer.initialized
 
     def reset(self) -> None:
-        """Clear all temporal post-processing state for a new registration."""
+        """새 registration을 위해 모든 시간 기반 후처리 상태를 지운다."""
 
         self._z_axis_stabilizer.reset()
         self._task_canonicalizer.reset()
 
     def process(self, raw_pose: np.ndarray, frame_id: int = 0) -> ProcessedPose:
-        """Build an output pose from raw data without modifying the input."""
+        """입력을 변경하지 않고 원본 데이터에서 출력 pose를 만든다."""
 
         raw = _immutable_pose(raw_pose, name="raw_pose")
         task_result: Optional[TaskPoseResult] = None

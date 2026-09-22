@@ -1,4 +1,4 @@
-"""Immutable D405 frame data and the verified latest-frame buffer policy."""
+"""변경 불가능한 D405 frame 데이터와 검증된 최신 frame buffer 정책."""
 
 from dataclasses import dataclass
 import threading
@@ -15,10 +15,10 @@ def _readonly_copy(array: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class D405Frame:
-    """One depth-to-color-aligned D405 frame.
+    """depth가 color에 정렬된 D405 frame 하나.
 
-    `depth_raw` preserves Z16 sensor units for recording. `depth_m` contains
-    the same aligned depth converted to meters for pose estimation.
+    `depth_raw`는 녹화를 위해 Z16 sensor 단위를 유지한다. `depth_m`에는 같은
+    정렬 depth를 pose 추정용 meter 단위로 변환해 저장한다.
     """
 
     source_frame_id: int
@@ -51,7 +51,7 @@ class D405Frame:
 
 
 class LatestFrameBuffer:
-    """Thread-safe single slot that retains only the newest D405 frame."""
+    """최신 D405 frame만 유지하는 thread-safe 단일 slot."""
 
     def __init__(self) -> None:
         self._condition = threading.Condition()

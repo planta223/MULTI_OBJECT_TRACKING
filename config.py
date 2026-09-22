@@ -1,4 +1,4 @@
-"""Runtime configuration for the multi-object tracking application."""
+"""다중 객체 tracking 애플리케이션의 실행 설정."""
 
 from dataclasses import dataclass, field
 import math
@@ -16,8 +16,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 WORKSPACE_ROOT = PROJECT_ROOT.parent
 FOUNDATIONPOSE_ROOT = WORKSPACE_ROOT / "FoundationPose"
 
-# Explicit application defaults. No object is configured until a real CAD is
-# supplied; in particular Pipe1 is not duplicated as a placeholder for Pipe2.
+# 명시적인 애플리케이션 기본값. 실제 CAD가 주어지기 전에는 객체를 설정하지
+# 않는다. 특히 Pipe1 CAD를 Pipe2 임시값으로 복제하지 않는다.
 CAMERA_TYPE = "cam_ros_zed2i"
 SEGMENTATION_MODE = "manual"
 ENABLE_VISUALIZATION = True

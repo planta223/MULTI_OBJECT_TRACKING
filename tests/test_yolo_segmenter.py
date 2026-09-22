@@ -1,4 +1,4 @@
-"""CPU-only tests for YOLO initial-mask selection and normalization."""
+"""YOLO 초기 mask 선택과 정규화의 CPU 전용 검사."""
 
 from types import SimpleNamespace
 

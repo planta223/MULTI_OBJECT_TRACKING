@@ -1,4 +1,4 @@
-"""CPU-only contract test for the direct D405 camera adapter."""
+"""D405 직접 카메라 adapter의 CPU 전용 계약 검사."""
 
 from unittest.mock import patch
 

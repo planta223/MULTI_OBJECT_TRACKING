@@ -1,8 +1,8 @@
-"""ROS2 subscriber adapter for the existing ``cam_zed.py`` topics.
+"""기존 ``cam_zed.py`` 토픽을 위한 ROS2 subscriber adapter.
 
-This module intentionally has no import-time ROS or camera-SDK dependency.
-The synchronization and decoding core can therefore be tested on CPU-only
-machines, while ROS imports are deferred until :meth:`RosZedSource.start`.
+이 모듈은 import 시점에 ROS나 카메라 SDK를 요구하지 않는다. 따라서 동기화와
+디코딩 핵심 로직은 CPU 환경에서 테스트할 수 있으며, ROS import는
+:meth:`RosZedSource.start` 호출 시점까지 지연된다.
 """
 
 from dataclasses import dataclass
@@ -31,7 +31,7 @@ class RosZedStreamInfo:
 
 
 def _stamp_ns(message: Any) -> int:
-    """Return a ROS message header stamp as one integer nanosecond key."""
+    """ROS 메시지 header stamp를 정수 nanosecond key 하나로 반환한다."""
 
     try:
         sec = int(message.header.stamp.sec)
@@ -46,7 +46,7 @@ def _stamp_ns(message: Any) -> int:
 
 
 def _camera_frame_id(message: Any) -> str:
-    """Return and validate the optical frame carried by a ROS Header."""
+    """ROS Header의 optical frame을 검증해 반환한다."""
 
     try:
         frame_id = message.header.frame_id
@@ -58,7 +58,7 @@ def _camera_frame_id(message: Any) -> str:
 
 
 def decode_color_message(message: Any) -> np.ndarray:
-    """Decode ``CompressedImage`` JPEG bytes into contiguous RGB uint8."""
+    """``CompressedImage`` JPEG byte를 연속 RGB uint8 배열로 디코딩한다."""
 
     encoded = np.frombuffer(message.data, dtype=np.uint8)
     bgr = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
@@ -73,7 +73,7 @@ def decode_color_message(message: Any) -> np.ndarray:
 
 
 def decode_depth_message(message: Any) -> np.ndarray:
-    """Decode ``16UC1; png`` millimeters into float32 meters."""
+    """Millimeter 단위 ``16UC1; png``를 meter 단위 float32로 디코딩한다."""
 
     encoded = np.frombuffer(message.data, dtype=np.uint8)
     depth_mm = cv2.imdecode(encoded, cv2.IMREAD_UNCHANGED)
@@ -90,7 +90,7 @@ def decode_depth_message(message: Any) -> np.ndarray:
 
 
 def camera_matrix_from_message(message: Any) -> np.ndarray:
-    """Read the rectified-left 3x3 intrinsic matrix from CameraInfo."""
+    """CameraInfo에서 rectified-left 3x3 intrinsic 행렬을 읽는다."""
 
     K = np.asarray(message.k, dtype=np.float64)
     if K.size != 9:
@@ -105,12 +105,12 @@ def _normalize_depth_to_color(
     depth_m: np.ndarray,
     color_shape: Tuple[int, int],
 ) -> np.ndarray:
-    """Map lower-resolution aligned-left depth onto the color pixel grid.
+    """저해상도 aligned-left depth를 color pixel grid에 대응시킨다.
 
-    ``cam_zed.py`` requests both products from the same ZED grab and asks the
-    SDK for a lower-resolution aligned-left depth measure. A proportional
-    resize therefore preserves that coordinate mapping. Nearest-neighbor is
-    used so no new metric depth values are interpolated across discontinuities.
+    ``cam_zed.py``는 같은 ZED grab에서 두 출력을 얻고 SDK에 저해상도
+    aligned-left depth를 요청한다. 따라서 비율을 유지한 resize는 좌표 대응을
+    보존한다. 불연속 경계에 새로운 depth 값이 보간되지 않도록 nearest-neighbor를
+    사용한다.
     """
 
     color_height, color_width = color_shape
@@ -135,7 +135,7 @@ def _normalize_depth_to_color(
 
 
 class RosZedFrameSynchronizer:
-    """Exact-stamp three-topic matcher with bounded pending/latest storage."""
+    """제한된 저장 공간을 쓰는 exact-stamp 3개 토픽 matcher."""
 
     def __init__(self, max_pending_stamps: int = _MAX_PENDING_STAMPS) -> None:
         if max_pending_stamps <= 0:
@@ -308,7 +308,7 @@ def _load_ros_dependencies():
 
 
 class RosZedSource(CameraSource):
-    """Subscribe to ``cam_zed.py`` without importing either vendor SDK."""
+    """제조사 SDK를 import하지 않고 ``cam_zed.py``를 구독한다."""
 
     def __init__(self, config: CameraConfig) -> None:
         if config.camera_type != "cam_ros_zed2i":
@@ -365,12 +365,12 @@ class RosZedSource(CameraSource):
 
     @property
     def ros_node(self):
-        """Expose the owned node for lightweight in-process output adapters.
+        """가벼운 in-process 출력 adapter가 사용할 내부 node를 제공한다.
 
-        The node remains owned and destroyed by this camera source.  Reusing it
-        keeps the tracking application as the single
-        ``foundationpose_cam_ros_zed2i``
-        node shown in rqt_graph and avoids a second executor thread.
+        Node의 소유와 삭제 책임은 이 카메라 입력에 있다. 이를 재사용하면
+        rqt_graph에서 tracking 애플리케이션이 단일
+        ``foundationpose_cam_ros_zed2i`` node로 표시되고 두 번째 executor
+        thread도 만들지 않는다.
         """
 
         if self._node is None:
