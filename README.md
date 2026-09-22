@@ -1,14 +1,117 @@
 # MULTI_OBJECT_TRACKING
 
-기존 D405, FoundationPose, `pipe_tracking` 코드를 역할 중심 구조로 이전한
-프로젝트다. 단일·이중 Pipe 실시간 실행 경로가 동일한 카메라, segmentation,
-tracking 추상화를 사용한다. 실제 정확도는 선택한 CAD, mask, 촬영 장면과
-FoundationPose 환경에 따라 달라진다.
+RGB-D 카메라 영상에서 Pipe 1~2개의 6D pose를 실시간으로 추정하고 추적하는
+애플리케이션이다. 카메라 종류와 관계없이 RGB, meter 단위 depth, intrinsic을
+공통 형식으로 변환하고, 수동 polygon 또는 YOLO instance segmentation으로 초기
+mask를 만든 뒤 FoundationPose registration과 tracking을 수행한다.
+
+최종 pose에는 조립 작업용 symmetry 처리 또는 Z축 안정화를 적용할 수 있으며,
+화면 overlay와 ROS2 pose/status 토픽으로 결과를 제공한다. 직접 실행뿐 아니라
+unit task 3에서 미리 준비하고 task 4에서 동작을 시작해 task 6에서 GPU 리소스를
+반환하는 supervisor 실행도 지원한다. 실제 정확도와 처리 속도는 CAD 품질,
+초기 mask, 카메라 환경, FoundationPose 설정에 따라 달라진다.
+
+## 전체 pipeline
+
+```mermaid
+flowchart TD
+    ENTRY[run_tracking.py 또는 scripts 진입점] --> CFG[CLI 인자 + config.AppConfig]
+    CFG --> CFACT[camera.factory]
+    CFG --> SFACT[segmentation.factory]
+
+    subgraph INPUT[카메라 및 입력 계층]
+        D405[Intel RealSense D405] --> RD405[RealSenseD405 sibling]
+        RD405 --> CD405[camera/cam_d405.py]
+
+        ZED_DIRECT[ZED 2i 직접 연결] --> ZCAM[ZED2iCamera sibling]
+        ZCAM --> CZED[camera/cam_zed2i.py]
+
+        ZED_HOST[호스트 ZED 2i] --> ZROS[ZED2i_ROS/cam_zed.py]
+        ZROS -->|color/depth/CameraInfo| CROZ[camera/cam_ros_zed2i.py]
+
+        RECORD[녹화 RGB-D sequence] --> SEQ[camera/sequence.py<br/>T-LESS 회귀 검사 전용]
+    end
+
+    CFACT --> CD405
+    CFACT --> CZED
+    CFACT --> CROZ
+    CD405 --> CAMERA[CameraSource]
+    CZED --> CAMERA
+    CROZ --> CAMERA
+    SEQ --> CAMERA
+    CAMERA --> FRAME[FrameData<br/>RGB + meter depth + K + timestamp]
+
+    subgraph INIT[초기 registration]
+        FRAME --> FREEZE[동일 frame 고정]
+        FREEZE --> SEG{segmentation 모드}
+        SFACT --> SEG
+        SEG -->|manual| MANUAL[polygon mask]
+        SEG -->|yolo| YOLO[YOLO instance mask]
+        MANUAL --> MASK[객체별 초기 mask]
+        YOLO --> MASK
+        CAD[객체별 CAD + meter scale] --> TRACKER[객체별 ObjectTracker]
+        FP[FoundationPose sibling<br/>scorer + refiner + CUDA raster] --> RUNTIME[공유 FoundationPoseRuntime]
+        RUNTIME --> TRACKER
+        MASK --> REGISTER[register_all]
+        TRACKER --> REGISTER
+    end
+
+    CFG --> CAD
+    CFG --> RUNTIME
+
+    REGISTER --> RAW[객체별 raw C_T_P]
+    FRAME --> LOOP[다음 최신 frame]
+    LOOP --> TRACK[track_all<br/>객체 1~2개 순차 추론]
+    TRACKER --> TRACK
+    TRACK --> RAW
+    RAW --> POST{객체별 pose 후처리}
+    POST -->|raw| RAWOUT[원본 pose 유지]
+    POST -->|task symmetry| TASK[task canonical pose]
+    POST -->|z-axis stabilization| ZSTABLE[Z축 안정화 pose]
+    RAWOUT --> FINAL[최종 output pose]
+    TASK --> FINAL
+    ZSTABLE --> FINAL
+    FINAL --> VIEW[OpenCV overlay]
+    FINAL -->|cam_ros_zed2i일 때| ROSOUT[ROS2 PoseStamped + tracking status]
+
+    SUP[scripts/run_task_supervisor.py] -. task 3: worker 시작 및 preload .-> ENTRY
+    SUP -. task 4: activation .-> FREEZE
+    SUP -. task 6: worker 종료 .-> STOP[CUDA/GPU 리소스 반환]
+```
+
+핵심 계약은 `FrameData`다. 어느 카메라를 선택해도 RGB `uint8`, meter 단위
+depth `float32`, 3x3 intrinsic `K`로 변환된 뒤 같은 segmentation 및
+FoundationPose 경로로 들어간다. 두 객체 모드도 카메라 frame은 한 번만 얻지만,
+공유 scorer/refiner/CUDA context의 안전을 위해 객체별 FoundationPose 추론은
+현재 순차 실행한다.
+
+## 현재 지원 범위
+
+| 구분 | 지원 항목 | 비고 |
+|---|---|---|
+| 실시간 카메라 | `cam_ros_zed2i` | 기본값. 호스트 `ZED2i_ROS` publisher의 ROS2 토픽을 구독한다. |
+| 실시간 카메라 | `cam_zed2i` | `ZED2iCamera`와 ZED SDK를 이용해 같은 프로세스에서 직접 획득한다. |
+| 실시간 카메라 | `cam_d405` | `RealSenseD405`와 librealsense를 이용해 직접 획득한다. |
+| 오프라인 입력 | `SequenceFrameSource` | `scripts/test_tless_smoke.py` 회귀 검사 경로이며 `--camera-type` 선택지는 아니다. |
+| 객체 수 | 1개 또는 2개 | `SUPPORTED_OBJECT_COUNTS = (1, 2)`. 현재 실행 script는 Pipe용 CAD/ID를 사용하며 3개 이상은 거부한다. |
+| 초기 mask | `manual`, `yolo` | 수동 polygon 또는 사용자 학습 YOLO instance segmentation. YOLO detection 모델은 지원하지 않는다. |
+| pose 연산 | `register`, `track` | 첫 고정 frame에서 registration 후 이후 frame에서 tracking한다. |
+| 단일 객체 후처리 | task symmetry 기본, Z축 안정화 선택 | `--z-axis-stabilization`을 주면 기본 task canonicalization 대신 Z축 안정화를 사용한다. `--task-symmetry-debug`는 진단 출력이다. |
+| 이중 객체 후처리 | raw 기본, task symmetry 또는 Z축 안정화 선택 | `--task-symmetry-output`과 `--z-axis-stabilization`은 동시에 사용할 수 없다. |
+| 실행 방식 | 직접 실행, task supervisor | supervisor는 task 3 preload, task 4 activation, task 6 종료 정책을 사용한다. |
+| 출력 | OpenCV overlay, 조건부 ROS2 pose/status | ROS2 출력은 `cam_ros_zed2i`에서 제공한다. 이중 객체는 `--left-pipe-object-id`가 필요하다. |
+
+현재 제공하지 않는 기능은 3개 이상 객체, YOLO 자동 재등록, 객체별 병렬
+FoundationPose 추론, detection box만 이용한 registration이다. YOLO의 좌우 배정은
+초기 ID 규칙일 뿐, 장기적인 re-identification이나 robot hand identity 추론이
+아니다.
 
 ## 디렉터리별 역할
 
-    ../RealSenseD405/ D405 영상 획득 의존성(SDK 및 센서 도구)
-    ../ZED2iCamera/   ZED 2i 영상 획득 의존성(ZED SDK adapter)
+    ../FoundationPose/ 필수 pose 추정 및 tracking engine
+    ../RealSenseD405/  선택 D405 영상 획득 의존성(SDK 및 센서 도구)
+    ../ZED2iCamera/    선택 ZED 2i 직접 획득 의존성(ZED SDK adapter)
+    ../ZED2i_ROS/      선택 ZED 2i 호스트 ROS2 publisher
     camera/           카메라 공통 계약과 장치별 adapter
     segmentation/     수동 또는 YOLO 초기 registration mask
     pose_estimation/  FoundationPose 연동 경계와 pose 결과
@@ -24,48 +127,141 @@ FoundationPose 환경에 따라 달라진다.
 `logging` 패키지는 Python 표준 라이브러리를 가려 FoundationPose 및 외부
 라이브러리 import를 망가뜨릴 수 있다.
 
-## Sibling 의존성
+## Sibling 저장소와 설치
 
-FoundationPose는 별도 checkout으로 관리한다. 기본 경로는 workspace의 sibling
-디렉터리인 `../FoundationPose`다. NVIDIA 안내에 따라 native extension을
-빌드하고 모델 가중치를 준비해야 한다. 다른 위치를 사용하려면
-`--foundationpose-root`를 지정한다.
+권장 workspace 배치는 다음과 같다. 실제 디렉터리 이름은
+`ZED2i_Camera`가 아니라 `ZED2iCamera`다.
 
-D405 구현도 sibling 패키지다. 이 애플리케이션을 실행하는 환경에 한 번
+```text
+Pipe_Align_kkb/
+├── FoundationPose/          # 필수: pose 추정 및 tracking
+├── MULTI_OBJECT_TRACKING/   # 현재 애플리케이션
+├── RealSenseD405/           # 선택: D405 직접 입력
+├── ZED2iCamera/             # 선택: ZED 2i SDK 직접 입력
+└── ZED2i_ROS/               # 선택: 호스트 ZED 2i ROS2 publisher
+```
+
+| Sibling | 필요 여부 | 사용하는 경우 | 책임 |
+|---|---|---|---|
+| `FoundationPose` | **필수** | 모든 pose registration/tracking | NVIDIA 모델, scorer/refiner, CUDA raster 및 native extension |
+| `RealSenseD405` | 선택 | `--camera-type cam_d405` | D405/librealsense 획득, color 정렬 depth, intrinsic 제공 |
+| `ZED2iCamera` | 선택 | `--camera-type cam_zed2i` | ZED SDK/`pyzed` 직접 획득 |
+| `ZED2i_ROS` | 선택, 현재 기본 카메라 경로에는 필요 | `--camera-type cam_ros_zed2i` | 호스트에서 ZED를 열고 color/depth/CameraInfo ROS2 토픽 발행 |
+
+카메라 factory는 선택한 adapter만 지연 import한다. 따라서 D405 경로는
+`pyzed`를 요구하지 않고, ZED 경로는 `pyrealsense2`를 요구하지 않는다.
+
+### 필수: FoundationPose
+
+먼저 [NVlabs/FoundationPose 공식 저장소](https://github.com/NVlabs/FoundationPose)의
+설치 절차를 완료한다. 이 프로젝트는 FoundationPose를 복사하거나 수정하지 않고
+기본적으로 `../FoundationPose`에서 직접 import한다.
+
+1. 공식 저장소를 workspace sibling으로 clone한다.
+
+       cd /path/to/Pipe_Align_kkb
+       git clone https://github.com/NVlabs/FoundationPose.git FoundationPose
+
+2. 공식 README가 지정한 network weight를 `FoundationPose/weights/`에 둔다.
+   model-based 실행에는 refiner `2023-10-28-18-33-37`과 scorer
+   `2024-01-11-20-02-45`가 필요하다. 공식 demo를 먼저 확인하려면 별도의
+   `demo_data/`도 내려받는다. 대규모 training data와 model-free reference
+   view는 현재 CAD 기반 Pipe tracking에는 필요하지 않다.
+
+3. 공식 권장 방식인 Docker image를 준비하고 container를 시작한다.
+
+       cd /path/to/Pipe_Align_kkb/FoundationPose
+       docker pull wenbowen123/foundationpose
+       docker tag wenbowen123/foundationpose foundationpose
+       cd docker
+       bash run_container.sh
+
+4. 최초 한 번 container 안에서 native extension을 빌드한다.
+
+       cd /path/to/Pipe_Align_kkb/FoundationPose
+       bash build_all.sh
+
+   이후에는 다시 빌드하지 않고 `docker exec -it foundationpose bash`로 들어갈
+   수 있다. 최신 GPU/CUDA 조합은 공식 README의 image 및 issue 안내를 우선한다.
+   Docker 대신 conda를 쓰려면 공식 `environment.yml` 생성, GPU에 맞는 PyTorch,
+   source build한 PyTorch3D/NVDiffRast, `requirements.txt`,
+   `build_all_conda.sh` 순서를 따른다.
+
+공식 설치 이후 이 프로젝트를 위해 추가로 해야 할 일은 다음과 같다.
+
+- **같은 Python/GPU 환경 사용:** `MULTI_OBJECT_TRACKING` worker는 FoundationPose가
+  import되고 CUDA extension이 보이는 Python으로 실행한다. `/opt/conda/envs/my/bin/python`
+  은 현재 Docker 예시일 뿐 실제 환경 경로와 다르면 바꾼다.
+- **workspace mount 확인:** Docker에서 `FoundationPose`와
+  `MULTI_OBJECT_TRACKING` 및 선택한 sibling 저장소가 모두 보여야 한다.
+- **CAD 준비:** 객체별 실제 CAD를 지정하고 CAD 단위에 맞는
+  `--mesh-scale-to-meter`를 준다. 현재 `models/pipe1.obj`, `models/pipe2.obj`는
+  millimeter 기준이므로 기본값 `0.001`을 사용한다.
+- **애플리케이션 선택 의존성 설치:** YOLO를 쓰면
+  `python3 -m pip install -r requirements-yolo.txt`, 직접 카메라를 쓰면 아래의
+  해당 sibling을 같은 환경에 설치한다.
+- **경로 확인:** 기본 위치가 아니면 모든 실행에
+  `--foundationpose-root /absolute/path/to/FoundationPose`를 준다.
+- **초기 검증:** 공식 `python run_demo.py`가 성공한 뒤 이 프로젝트의
+  `scripts/test_camera.py`, 단일 객체, 이중 객체 순서로 확인한다. 최초 실행은
+  online compilation 때문에 느릴 수 있다.
+
+### 선택: RealSenseD405
+
+`cam_d405`에서만 필요하다. FoundationPose를 실행하는 환경에 editable로
 설치한다.
 
-    cd /home/kkb/Workspace/MULTI_OBJECT_TRACKING
+    cd /path/to/Pipe_Align_kkb/MULTI_OBJECT_TRACKING
     python3 -m pip install -e ../RealSenseD405
 
-다음 명령도 동일한 editable 의존성을 설치한다.
+또는 `python3 -m pip install -r requirements-camera.txt`를 사용한다. Linux host는
+장치 접근을 위해 sibling의 `scripts/install_realsense_udev_rules.sh`를 한 번
+실행해야 할 수 있다. 애플리케이션 import 이름은 `realsense_d405`다.
 
-    python3 -m pip install -r requirements-camera.txt
+### 선택: ZED2iCamera
 
-이 방식은 실행 중 `sys.path` 변경을 피하고, 남아 있는 과거 복사본인
-`MULTI_OBJECT_TRACKING/RealSenseD405/`가 새 패키지를 가리는 문제를 막는다.
-애플리케이션에서는 소문자 모듈 이름 `realsense_d405`를 사용한다.
-
-기존 FoundationPose 디렉터리의 실험 스크립트나 로컬 수정 사항은 이
-애플리케이션 패키지로 복사하지 않는다.
-
-### 선택 사항: ZED 2i 직접 입력
-
-FoundationPose와 동일한 환경에 Stereolabs ZED SDK와 일치하는 `pyzed` Python
-API를 설치한다. `pyzed`는 일반 PyPI 의존성이 아니라 ZED SDK가 제공한다.
-Linux에서는 SDK 설치 프로그램이 Python 설치 도구를 `/usr/local/zed` 아래에
-배치한다.
+`cam_zed2i` 직접 입력에서만 필요하다. FoundationPose 환경과 호환되는
+Stereolabs ZED SDK를 먼저 설치하고, SDK가 제공하는 `pyzed` API를 같은 Python에
+설치한다. `pyzed`는 일반적인 portable PyPI package가 아니다.
 
     cd /usr/local/zed
     python3 get_python_api.py
     python3 -c "import pyzed.sl as sl; print('pyzed OK')"
 
-그다음 sibling 패키지를 설치한다.
-
-    cd /home/kkb/Workspace/MULTI_OBJECT_TRACKING
+    cd /path/to/Pipe_Align_kkb/MULTI_OBJECT_TRACKING
     python3 -m pip install -e ../ZED2iCamera
 
-애플리케이션 factory는 선택된 카메라 adapter만 import한다. D405 실행은
-`pyzed`를 import하지 않고, ZED 실행은 `pyrealsense2`를 import하지 않는다.
+마지막 명령은 `python3 -m pip install -r requirements-zed.txt`로 대신할 수 있다.
+
+### 선택: ZED2i_ROS
+
+기본 `cam_ros_zed2i` 경로의 **호스트 측 bridge**다. Python package로 worker에
+설치하는 것이 아니라, ZED SDK와 `pyzed`가 있는 ROS2 host에서 publisher를
+실행한다. FoundationPose container는 물리 카메라나 `pyzed`를 열지 않고 ROS2
+message만 구독한다.
+
+호스트:
+
+    cd /path/to/Pipe_Align_kkb/ZED2i_ROS
+    source /opt/ros/humble/setup.bash
+    export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    export ROS_DOMAIN_ID=8
+    python3 cam_zed.py
+
+FoundationPose container:
+
+    cd /path/to/Pipe_Align_kkb/MULTI_OBJECT_TRACKING
+    source /opt/ros/foxy/setup.bash
+    export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+    export ROS_DOMAIN_ID=8
+    export FASTRTPS_DEFAULT_PROFILES_FILE="$PWD/ros2/fastdds_udp.xml"
+    /opt/conda/envs/my/bin/python scripts/test_camera.py \
+      --camera-type cam_ros_zed2i --duration 4 --preview
+
+양쪽의 `ROS_DOMAIN_ID`가 같아야 한다. 현재 검증 구성은 host Humble, container
+Foxy이며 cross-user SHM 문제를 피하기 위해 container에만 UDP 전용 Fast DDS
+profile을 적용한다. 상세 topic/QoS 경계는 `../ZED2i_ROS/README.md`와
+`ros2/README.md`를 참고한다.
 
 ## 초기 segmentation: 수동 또는 YOLO
 
